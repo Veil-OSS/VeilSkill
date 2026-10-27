@@ -4,7 +4,7 @@ Sources: [API-key guide](https://veil.rip/docs/api-keys), [quota contract](https
 
 ## Obtain and store a key
 
-Open [API keys](https://veil.rip/developers), available from the main navigation, mobile menu and active account menu. A person manages their own card; an organisation requires an accepted owner. An active device signs management requests.
+Open [API keys](https://veil.rip/developers), available from the active profile menu. A person manages their own card; an organisation requires an accepted owner. An active device signs management requests.
 
 Choose a label of 1 to 60 characters, `read` and/or `verify` scope, and expiry from 1 to 365 days (default 90). Each owner can have 20 unexpired, unrevoked keys, including suspended keys. Creation returns HTTP 201 with `key` metadata and `secret`. The secret appears once; the server stores its SHA-256 hash.
 

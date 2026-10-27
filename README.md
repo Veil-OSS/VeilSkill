@@ -67,7 +67,7 @@ Run `python3 -m unittest discover -s tests -v` to check the client. HTTP fixture
 ## Good to know
 
 - Public reads, card lookups and message verification need no API key. Optional server/local keys share an owner allowance, normally 600 requests/minute plus a 120/minute verification bucket.
-- Create keys at [API keys](https://veil.rip/developers), available in the main navigation and account menu. Use `--api-key-env VEIL_API_KEY` to read a bearer secret from server configuration. Never put one in a frontend bundle.
+- Create keys at [API keys](https://veil.rip/developers), available in the profile menu. Use `--api-key-env VEIL_API_KEY` to read a bearer secret from server configuration. Never put one in a frontend bundle.
 - The live reference now has 65 endpoints and 10 guides, with response fields, types, nullability, nested objects, headers and selected JSON examples. [Responses and errors](https://veil.rip/docs/errors) explains 74 searchable codes and recovery actions.
 - `valid` is the overall verification verdict. A signature can match after its key was revoked, so never rely on `signatureOk` alone.
 - A 503 is never a successful verification.
