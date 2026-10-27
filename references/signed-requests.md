@@ -1,11 +1,11 @@
-# Signed requests (writes)
+# Device-signed requests
 
-Source: https://veil.rip/docs/signed-requests plus the per-endpoint pages. Read this only when the user wants to change a card. Reads and `POST /v1/verify` never need it.
+Source: https://veil.rip/docs/signed-requests plus the per-endpoint pages. Read this when preparing a card change, a signed pairing read or API-key management. Public reads and `POST /v1/verify` do not need a device signature.
 
 ## Ground rules
 
-- A write is signed by an **active authorised device key** that belongs to the card owner. Never ask the user to paste a private key, never generate or store one on their behalf, and never send one to Veil. Prepare the unsigned record and request bytes, explain what must be signed, and let the owner sign on their own device.
-- Signed writes are for local or server clients. CORS does not open them to other websites, so do not build them into browser pages.
+- A management request is signed by an **active authorised device key** with the role required by its endpoint. Never ask the user to paste a private key, never generate or store one on their behalf, and never send one to Veil. Prepare the unsigned record and request bytes, explain what must be signed, and let the owner sign on their own device.
+- Public CORS does not open device-signing headers to other websites. External clients use local or server flows; Veil’s own pages sign with the enrolled browser device.
 - A publication is ready only after its commitment appears in a witnessed checkpoint. If a request times out, read the card's current versions before resending.
 
 ## Request signature
@@ -29,9 +29,17 @@ GET /v1/device-requests/PAIRING_CODE
 <Unix milliseconds>
 ```
 
-The JSON body of a POST carries `nonce` (fresh, single use, 16-128 chars of letters, digits, `_`, `-`) and `timestamp` (Unix **milliseconds**, within 2 minutes of the server clock). The request signature covers method, exact path and exact body, so sign the bytes you actually send.
+Do not append a newline after the final timestamp in signed GET bytes.
+
+The JSON body of a POST, PATCH or DELETE carries `nonce` (fresh, single use, 16-128 chars of letters, digits, `_`, `-`) and `timestamp` (Unix **milliseconds**, within 2 minutes of the server clock). The request signature covers method, exact path and exact body, so sign the bytes you actually send.
 
 Limits: 10 signed writes per minute per key, 30 writes per minute per IP, separate budgets for account-linking steps.
+
+## API-key management
+
+A bearer key cannot authorise these calls. A person manages their own card; an organisation requires an accepted owner. Signed GET requests inspect the account, keys and private receipts. `POST /v1/developer/accounts/{n}/keys` creates a key; `DELETE /v1/developer/accounts/{n}/keys/{id}` permanently revokes it.
+
+Creation takes `label`, optional `scopes` and `expiresInDays`, plus the common nonce and timestamp. HTTP 201 returns `key` metadata and `secret` once. Management writes accept at most 8 KiB and reject unknown fields. These actions produce private signed receipts and do not publish an identity version or a public-log entry. Read [api-keys.md](api-keys.md) for the response shapes and lifecycle.
 
 ## Record (the thing the card is made of)
 
@@ -60,6 +68,6 @@ Canonical JSON: object keys sorted by UTF-16 code units, array order preserved, 
 
 ## Write errors
 
-`422 invalid_record`, `401 missing_signature`, `403 signer_not_authorised`, `409 version_conflict` (re-read versions, rebuild, retry), `503 log_unavailable`. For other statuses see the table in SKILL.md.
+`422 invalid_record`, `401 missing_signature`, `403 signer_not_authorised`, `409 version_conflict` (re-read versions, rebuild, retry), `503 log_unavailable`. Read the endpoint’s `errorDetails` and [responses-and-errors.md](responses-and-errors.md) for recovery. Check the current card or operation state before preparing another signed request after a timeout.
 
 For exact per-endpoint bodies run `python scripts/veil.py doc <id>` (for example `publish-person`, `complete-link`).

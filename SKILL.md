@@ -1,74 +1,77 @@
 ---
 name: veil
-description: Connect an app, bot or agent to Veil (veil.rip), the identity and signing-key directory. Use this skill whenever the user mentions Veil, veil.rip, a Veil card, a Veil signature block, or wants to look up who owns an account or key, check who signed a message (even if the account was stolen), verify a card or its transparency log, add a Veil badge or widget, or call any Veil API endpoint. Also use it when building messaging-app features such as sender verification, key lookup by Discord/GitHub/email/domain/Fediverse account, or signed-message checks, even if the user does not say "Veil" explicitly but is integrating with the veil.rip docs.
+description: Integrate Veil (veil.rip) into an app, bot or service. Use for Veil card and linked-account lookups, signed-message checks, transparency proofs, badges and widgets, API keys and quotas, or interpreting Veil endpoint responses and errors.
 ---
 
 # Veil integration
 
-Veil maps an account people already know (Discord, GitHub, email, domain, Fediverse) to a **card** that holds that person's signing keys, with every change recorded in a public, witnessed transparency log. An integration uses it to answer two questions: *which key belongs to this account?* and *did that key sign this message?*
+Veil resolves accounts people know (Discord, GitHub, email, domain and Fediverse) to a permanent card and its signing keys. A stolen account cannot produce the owner's signature. Every card change enters a public, witnessed transparency log.
 
-Base URL: `https://veil.rip`. Log host: `https://log.veil.rip`. Docs: `https://veil.rip/docs`.
-Public reads, card lookups and message verification need **no API key** and can run from a browser, bot or server.
+Use `https://veil.rip` for the directory, `https://log.veil.rip` for the log and [the documentation](https://veil.rip/docs) for contracts. Public reads and message verification work anonymously. Optional API keys give server and local clients a shared owner allowance.
 
-## Fastest path: the bundled client
+## Start with the current contract
 
-`scripts/veil.py` is a stdlib-only Python CLI (no installs) that covers every public read and message verification. Run it instead of hand-writing requests.
+The [live catalogue](https://veil.rip/v1/integrations) currently contains 65 endpoints and 10 guides. `GET /v1/integrations/{id}` returns a localised entry and catalogue revision. Its ID is also the documentation slug. Read the entry before implementing a call; follow its access mode, parameters, response types and verification requirements.
+
+- `responses` gives HTTP status, content type, field names, types, descriptions and selected examples.
+- `responseObjects` describes nested types; `responseHeaders` describes headers.
+- `errorDetails` gives HTTP status, stable code, explanation, recovery action and scope. `response` and `errors` remain available for existing consumers.
+- Read [references/responses-and-errors.md](references/responses-and-errors.md) when interpreting fields, handling errors, caching responses or choosing retries.
+
+## Bundled client
+
+`scripts/veil.py` uses Python's standard library. Put client options before the command.
 
 ```bash
-python scripts/veil.py lookup --github 109546049        # account -> card number
-python scripts/veil.py card 1                            # full card + proof
-python scripts/veil.py summary 1                         # small metadata only
-python scripts/veil.py verify --block-file signed.txt    # check a signature block
-python scripts/veil.py key-active <64-hex> --t 1767225600
-python scripts/veil.py get /v1/identities/1/orgs         # any public GET path
-python scripts/veil.py doc verify-message                # live contract for one endpoint
-python scripts/veil.py --help
+python scripts/veil.py lookup --github 109546049
+python scripts/veil.py card 1
+python scripts/veil.py verify --block-file signed.txt
+python scripts/veil.py doc verify-message
+python scripts/veil.py doc errors --lang it
+python scripts/veil.py --include-headers platforms
+python scripts/veil.py --api-key-env VEIL_API_KEY quota
+python scripts/veil.py --output badge.svg get /o/veil/badge.svg
+python scripts/veil.py --dry-run lookup --github 109546049
 ```
 
-Add `--dry-run` to print the exact request without sending it. Output is JSON; errors go to stderr with a non-zero exit code, and 429/503 responses are retried once after `Retry-After` (capped at 30s).
+The named environment variable supplies an optional bearer secret; request previews redact it. Keep keys in server secret configuration. The client never signs management requests or handles device private keys. Read-only transient failures get at most one retry. If the required wait exceeds 30 seconds, the client returns the response without retrying early.
 
-## Which endpoint for which job
+## Choose a call
 
-| Goal | Call |
+| Job | Call |
 |---|---|
-| Find the card for an account/key | `GET /v1/lookup?<one param>` (`discord`, `github`, `email`, `domain`, `fediverse`, `key`, `fingerprint`) |
-| Read the full signed card and proof | `GET /u/{card}.json` (person) or `GET /o/{card}.json` (organisation) |
-| Show a name/logo/badges in a UI | `GET /v1/identities/{n}/summary` (labels only, no proof) |
-| Check a signed message | `POST /v1/verify` with `{"block": "..."}` (optionally `at`) |
-| Is this key valid at time T? | `GET /v1/keys/{key}/active-at?t=<unix seconds>` |
-| Who holds this key? | `GET /v1/keys/{key}` |
-| Poll for changes | `GET /v1/identities/{n}/versions?latest=true`, `GET /v1/identities/{n}/events?after=<id>` |
-| Verify independently | card `proof`, `/v1/identities/{n}/versions/{k}/proof`, `GET /v1/log` |
-| Show a card on a site | badge `/{kind}/{card}/badge.svg`, widget `/{kind}/{card}/embed`, or `/embed.js` |
+| Find a card by one exact account, key or fingerprint | `GET /v1/lookup` with exactly one lookup parameter |
+| Read a full card and its proof | `GET /u/{card}.json` or `/o/{card}.json` |
+| Display current name, image or badges | `GET /v1/identities/{n}/summary` |
+| Verify a signed message | `POST /v1/verify` with a block or raw signature fields |
+| Read a key's owner or validity | `GET /v1/keys/{key}` or `/active-at?t=<Unix seconds>` |
+| Poll for changes | `GET /v1/identities/{n}/versions?latest=true&limit=1` or `/events?after=<id>` |
+| Embed a card | `/{kind}/{card}/badge.svg`, `/{kind}/{card}/embed` or `/embed.js` |
+| Inspect an integration's allowance | `GET /v1/rate-limit` with its bearer key |
+| Create or manage integration keys | Device-signed `/v1/developer/accounts/{n}` routes; [API-key reference](references/api-keys.md) |
 
-The complete list of all 59 endpoints (method, path, access level, summary) and detailed parameters for the core ones are in `references/endpoints.md`. Read it when you need an endpoint not shown above.
+[references/endpoints.md](references/endpoints.md) maps all 65 endpoint IDs to paths and access requirements. Read its relevant group for calls outside this table.
 
-## Recipes
+## Resolve and verify
 
-**Verify the sender of a message in a messaging app.** Take the signature block the sender pasted, `POST /v1/verify {"block": block}`, and trust `valid`, not `signatureOk`. If you know when the message was published from a source you trust (your server's receive time), pass it as `at` (Unix seconds); a date the signer wrote proves nothing. For a bot or any account check, use raw mode with `key`, `message`, `signature` plus `platform` and `subject` so Veil also confirms that identity held the sending account at that time. Use the platform's stable account ID for bots, never the display name.
+Use stable platform IDs. Discord takes a 17 to 20-digit user ID; GitHub takes a numeric account ID, not a login. Supply exactly one lookup parameter. Display names are not unique. Store permanent card number `n`; aliases can change or be reassigned.
 
-**Resolve "who is this account?"** `lookup` with the exact platform ID (Discord: 17-20 digit user ID; GitHub: numeric ID, not the login), then `summary` for display data. Supply exactly one lookup parameter; a 404 means no card, not an error in your code. Display names are not unique, so never identify someone by name alone.
+For a message, use the overall `valid` verdict. HTTP 200 with `valid: false` is a completed negative check. `signatureOk` can be true after a key was revoked. Read `reason`, `keyState` and any requested account ownership result. When checking a bot's sender, supply raw `key`, `message`, `signature`, `platform` and `subject` so ownership is checked too. Use a publication time you independently trust for `at`, in Unix seconds; a timestamp written by the signer proves nothing.
 
-**Remember a person or organisation.** Store the permanent card number `n`. Aliases can change or be reassigned to another card.
+`POST /v1/verify` sends the message to Veil. [Browser verification](https://veil.rip/verify) keeps data after `#` in the browser. Ask for a network verification only within the user's intended sharing of that message.
 
-**Keep a cache fresh.** Fetch `versions?latest=true&limit=1` rather than the whole history on every poll, and follow `next`/`before` cursors until `null` when paging (pages can be shorter than `limit`).
+A summary carries no proof. A full card can return 200 with `proof: null`; leave it unverified and retry later. Independent verification requires the exact signed records, commitments, version chain, inclusion proof, expected log key and witness policy. `/v1/log` and `/v1/verify` report the server's checks. Only accepted organisation memberships count as authority.
 
-**Independent verification (no trust in the server's verdict).** Fetch the full card, recompute commitments, verify signatures, follow `prev` through the version chain, check the inclusion proof against a signed checkpoint, and pin the expected log and witness policy (`GET /v1/log`, log `policy`/`witnesses`). `/v1/log` and `/v1/verify` verdicts are the server's own checks.
+## Access and limits
 
-## Rules that prevent real mistakes
+Anonymous browser requests use public CORS and omit credentials. CORS opens public reads and `POST /v1/verify`; it does not allow `Authorization` or device-signing headers. Keep bearer keys in server or local clients.
 
-- `valid` is the overall verdict. A signature can still match (`signatureOk: true`) after its key was revoked, while `valid` is false for the current time. Read `keyState` and `reason`.
-- A `503` (including `log_unavailable`) is **never** a successful verification. Retry later; do not fall back to "assume valid".
-- The `/v1/identities/{n}/summary` endpoint carries no proof. Use the full card for any authorisation decision.
-- An organisation invitation is not membership. Only accepted memberships count; check roles in the signed records.
-- `POST /v1/verify` sends the message text to Veil. If privacy matters, point users to `https://veil.rip/verify` (checks in the browser; data after `#` never leaves it) or verify locally.
-- Rate limits: 300 reads/min/IP (verification counts as a read), 30 writes/min/IP, 10 signed writes/min/key. On 429 wait `Retry-After` seconds.
-- Errors are `{"error":{"code","message"}}`: 400 invalid input, 401 bad/missing signature, 403 key not allowed, 404 none found, 409 state changed (re-read, then retry), 410 card erased, 422 failed a domain rule or account proof, 503 service/log unavailable.
+An API owner normally shares 600 requests per minute across all keys. Verification also uses a shared 120-per-minute bucket. Both refill continuously. Optional key caps and UTC-day caps can further constrain access. Rotation does not reset the owner's allowance. Anonymous traffic retains its existing IP limits, and signed writes retain their own limits. Read [references/api-keys.md](references/api-keys.md) for scopes, expiry, custom limits, status headers and private receipts.
 
-## Writes (cards, organisations, account proofs)
+Errors use a stable `error.code` and a mutable English `error.message`. Use the endpoint's `errorDetails` and [the error guide](https://veil.rip/docs/errors) for the next action. Respect `Retry-After`; check the current state before repeating a signed operation. A service failure is never a successful verification.
 
-Anything that changes a card is a **signed request** made by the owner's device key. These calls are for local or server clients only (CORS does not open them to other websites). Never ask for, generate on the owner's behalf, store, or transmit a private key, and never send one to Veil. If the user wants a write, prepare the unsigned record/request and explain the signing step; have them sign with their own device. The signing format (headers, canonical bytes, record fields) is in `references/signed-requests.md`.
+## Signed operations
 
-## Staying current
+Creating or changing a card and managing API keys require an authorised device signature. A bearer key grants public reads and/or verification only. Read [references/signed-requests.md](references/signed-requests.md) when the user requests a signed operation.
 
-Veil is still evolving. The machine-readable index at `GET /v1/integrations` carries a `revision` field and every endpoint's contract is at `GET /v1/integrations/{id}` (same ids as the docs slugs, e.g. `verify-message`). If a call behaves differently from this skill, run `python scripts/veil.py doc <id>` and trust the live contract.
+Prepare the unsigned request and signing bytes, then let the owner sign on their own device. Never ask them to paste, transmit or store a device private key in the integration. A key-management action records a private receipt; publishing an identity version requires witnessed inclusion in the public log. Check the relevant state after a timeout before signing another request.

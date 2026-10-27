@@ -1,129 +1,139 @@
 # Veil endpoint reference
 
-Source: `https://veil.rip/v1/integrations` (catalogue revision `f6645f1895567561`) and the per-endpoint pages under `https://veil.rip/docs/{id}`. Every row's `id` is the docs slug and the key for `GET /v1/integrations/{id}` (full live contract with examples).
+Snapshot of [the live catalogue](https://veil.rip/v1/integrations), revision `6e91849bbb93df7c`, reviewed 27 October 2026. It contains **65 endpoints and 10 guides**. Each endpoint ID is its docs slug and the key for `GET /v1/integrations/{id}`.
 
-Base URL `https://veil.rip` unless the Base column says `log` (host `https://log.veil.rip`).
+The detail JSON contains response status, content type, fields, nested objects, headers, selected examples and error recovery guidance. Read [responses and errors](responses-and-errors.md) before relying on an HTTP status or parsing a body. Fetch a current detail with `python scripts/veil.py doc <id>`.
 
-Access levels: **public** = no key; **public-write** = unauthenticated write, rate-limited; **signed** = owner's device-key signature (see `signed-requests.md`); **private-code** = secret token in the URL; **provider-callback** = OAuth redirect target.
-
-Contents: [Guides](#guides) · [Find people and cards](#find-people-and-cards) · [Keys and signatures](#keys-and-signatures) · [Versions and changes](#versions-and-changes) · [Organisations and public status](#organisations-and-public-status) · [Share and embed](#share-and-embed) · [Transparency log](#transparency-log) · [Manage a card](#manage-a-card) · [Service reference](#service-reference) · [Detailed contracts](#detailed-contracts)
+`directory` uses `https://veil.rip`; `log` uses `https://log.veil.rip`. Access modes are `public` (anonymous, with optional bearer access only on eligible directory calls), `api-key` (bearer required), `signed` (device signature), `private-code` (secret URL token), `public-write` (temporary unauthenticated operation) and `provider-callback` (OAuth return page). Browser modes distinguish anonymous `fetch`, `frame`, `navigation` and `local-or-server`.
 
 ## Guides
 
-`start` (docs root), `browser-apps`, `message-verification`, `sharing`, `proofs`, `signed-requests`, `limits`, `api-reference` at `https://veil.rip/docs[/{id}]`. Key facts from them are folded into `SKILL.md` and this folder.
+- [`start`](https://veil.rip/docs) Integrate Veil
+- [`browser-apps`](https://veil.rip/docs/browser-apps) Call Veil from a website
+- [`message-verification`](https://veil.rip/docs/message-verification) Verify a signed message
+- [`sharing`](https://veil.rip/docs/sharing) Show a card on your site
+- [`proofs`](https://veil.rip/docs/proofs) Verify a card independently
+- [`signed-requests`](https://veil.rip/docs/signed-requests) Make a signed request
+- [`limits`](https://veil.rip/docs/limits) Limits and errors
+- [`api-reference`](https://veil.rip/docs/api-reference) API reference
+- [`api-keys`](https://veil.rip/docs/api-keys) Use a developer API key
+- [`errors`](https://veil.rip/docs/errors) Responses and errors
 
 ## Find people and cards
 
-| id | Method | Path | Access | Summary |
+| ID | Method and path | Base | Access / browser | Purpose |
 |---|---|---|---|---|
-| lookup | GET | `/v1/lookup` | public | Find the card holding one exact account, key or fingerprint |
-| person-card | GET | `/u/{card}.json` (also `/u/{card}`, `/v1/identities/{n}`) | public | Full public card, signed record, proof, recent history |
-| organisation-card | GET | `/o/{card}.json` (also `/o/{card}`, `/v1/organizations/{n}`) | public | Organisation, signed membership record, links, proof |
-| summary | GET | `/v1/identities/{n}/summary` | public | Current metadata without records, proofs, history |
-| aliases | GET | `/v1/aliases/{kind}/{alias}` | public | Check alias availability / resolve to permanent card |
-| platforms | GET | `/v1/platforms` | public | Supported platforms, proof methods, availability |
+| [`lookup`](https://veil.rip/docs/lookup) | `GET /v1/lookup` | directory | `public` / `fetch` | Find the card that holds one exact account, key or fingerprint. |
+| [`person-card`](https://veil.rip/docs/person-card) | `GET /u/{card}.json` | directory | `public` / `fetch` | Read the full public card, signed record, proof and recent history. |
+| [`organisation-card`](https://veil.rip/docs/organisation-card) | `GET /o/{card}.json` | directory | `public` / `fetch` | Read an organisation, its signed membership record, public links and proof. |
+| [`summary`](https://veil.rip/docs/summary) | `GET /v1/identities/{n}/summary` | directory | `public` / `fetch` | Get current metadata without downloading signed records, proofs or history. |
+| [`aliases`](https://veil.rip/docs/aliases) | `GET /v1/aliases/{kind}/{alias}` | directory | `public` / `fetch` | Check availability and find the permanent card behind a claimed alias. |
+| [`platforms`](https://veil.rip/docs/platforms) | `GET /v1/platforms` | directory | `public` / `fetch` | Find the supported platforms, proof methods and their current availability. |
 
 ## Keys and signatures
 
-| id | Method | Path | Access | Summary |
+| ID | Method and path | Base | Access / browser | Purpose |
 |---|---|---|---|---|
-| key-info | GET | `/v1/keys/{key}` | public | Card holding a key and its validity period |
-| key-at-time | GET | `/v1/keys/{key}/active-at` | public | Was a key active at a given time |
-| verify-message | POST | `/v1/verify` | public | Check a signature block or key+message+signature (read-only POST) |
-| grant-key | GET | `/v1/grant-key` | public | Public key that signs account-linking grants |
+| [`key-info`](https://veil.rip/docs/key-info) | `GET /v1/keys/{key}` | directory | `public` / `fetch` | Look up a public key, the card holding it and its validity period. |
+| [`key-at-time`](https://veil.rip/docs/key-at-time) | `GET /v1/keys/{key}/active-at` | directory | `public` / `fetch` | Ask whether a key was active at a particular time. |
+| [`verify-message`](https://veil.rip/docs/verify-message) | `POST /v1/verify` | directory | `public` / `fetch` | Check a signature block or an explicit key, message and signature. This POST only reads. |
+| [`grant-key`](https://veil.rip/docs/grant-key) | `GET /v1/grant-key` | directory | `public` / `fetch` | Read the public key used to sign account-linking grants. |
 
 ## Versions and changes
 
-| id | Method | Path | Access | Summary |
+| ID | Method and path | Base | Access / browser | Purpose |
 |---|---|---|---|---|
-| versions | GET | `/v1/identities/{n}/versions` | public | Page canonical records, signatures, openings |
-| history | GET | `/v1/identities/{n}/history` | public | Older version events and surrounding account transfers |
-| version-proof | GET | `/v1/identities/{n}/versions/{k}/proof` | public | Inclusion proof for version k under current checkpoint |
-| events | GET | `/v1/identities/{n}/events` | public | Takeover and publication-reconciliation events |
-| takeovers | GET | `/v1/takeovers` | public | Account transfer requests involving a card |
+| [`versions`](https://veil.rip/docs/versions) | `GET /v1/identities/{n}/versions` | directory | `public` / `fetch` | Page through canonical records, signatures and openings. |
+| [`history`](https://veil.rip/docs/history) | `GET /v1/identities/{n}/history` | directory | `public` / `fetch` | Read older version events and the account transfers around them. |
+| [`version-proof`](https://veil.rip/docs/version-proof) | `GET /v1/identities/{n}/versions/{k}/proof` | directory | `public` / `fetch` | Get the inclusion proof for a particular version under the current checkpoint. |
+| [`events`](https://veil.rip/docs/events) | `GET /v1/identities/{n}/events` | directory | `public` / `fetch` | Read takeover and publication-reconciliation events for a card. |
+| [`takeovers`](https://veil.rip/docs/takeovers) | `GET /v1/takeovers` | directory | `public` / `fetch` | Read account transfer requests involving a card on either side. |
 
 ## Organisations and public status
 
-| id | Method | Path | Access | Summary |
+| ID | Method and path | Base | Access / browser | Purpose |
 |---|---|---|---|---|
-| memberships | GET | `/v1/identities/{n}/orgs` | public | A person's memberships or an organisation's members |
-| staff-roles | GET | `/v1/staff` | public | Veil's official organisation and staff role powers |
-| moderation | GET | `/v1/identities/{n}/moderation` | public | Public status and moderation actions for a card |
-| moderation-entries | GET | `/v1/moderation/entries` | public | Page public moderation, badge, badge-removal log entries |
-| badge-catalogue | GET | `/v1/badges/catalogue` | public | Badge IDs, labels, assignment rules |
-| card-badges | GET | `/v1/identities/{n}/badges` | public | A card's badges and removed-badge history |
+| [`memberships`](https://veil.rip/docs/memberships) | `GET /v1/identities/{n}/orgs` | directory | `public` / `fetch` | Read a person’s organisation memberships or an organisation’s members. |
+| [`staff-roles`](https://veil.rip/docs/staff-roles) | `GET /v1/staff` | directory | `public` / `fetch` | Identify Veil’s official organisation and the powers of each staff role. |
+| [`moderation`](https://veil.rip/docs/moderation) | `GET /v1/identities/{n}/moderation` | directory | `public` / `fetch` | Read the public status and moderation actions affecting a card. |
+| [`moderation-entries`](https://veil.rip/docs/moderation-entries) | `GET /v1/moderation/entries` | directory | `public` / `fetch` | Page through public moderation, badge and badge-removal log entries. |
+| [`badge-catalogue`](https://veil.rip/docs/badge-catalogue) | `GET /v1/badges/catalogue` | directory | `public` / `fetch` | Read badge IDs, labels and assignment rules. |
+| [`card-badges`](https://veil.rip/docs/card-badges) | `GET /v1/identities/{n}/badges` | directory | `public` / `fetch` | Read a card’s badges and removed badge history. |
 
 ## Share and embed
 
-| id | Method | Path | Access | Summary |
+| ID | Method and path | Base | Access / browser | Purpose |
 |---|---|---|---|---|
-| oembed | GET | `/oembed` | public | oEmbed for a Veil person, organisation or `/v/` URL |
-| badge-image | GET | `/{kind}/{card}/badge.svg` | public | SVG status badge for README/profile/signature |
-| card-image | GET | `/{kind}/{card}/card.png` | public | 1200x630 PNG social preview |
-| logo | GET | `/{kind}/{n}/logo.{format}` | public | Currently published logo or photo |
-| widget | GET | `/{kind}/{card}/embed` | public (iframe only) | Read-only card that verifies in the visitor's browser |
-| embed-loader | GET | `/embed.js` | public | Turns `data-veil-card` / `data-veil-org` elements into card frames |
-| preview-image | GET | `/preview.png` | public | General directory preview image |
-| verify-page | GET | `/verify` | public (page) | Browser-side message check (data after `#` stays local) |
-| verify-link | GET | `/v/{n}/{signature}` | public (page) | Shared verification link with server-made social preview |
-| snippet-builder | GET | `/embed` | public (iframe) | Copy a link, badge or widget with live preview |
-
-`kind` is `u` (person) or `o` (organisation).
+| [`oembed`](https://veil.rip/docs/oembed) | `GET /oembed` | directory | `public` / `fetch` | Get an embeddable card or link preview for a supported Veil URL. |
+| [`badge-image`](https://veil.rip/docs/badge-image) | `GET /{kind}/{card}/badge.svg` | directory | `public` / `fetch` | Show a linked status badge in a README, profile or forum signature. |
+| [`card-image`](https://veil.rip/docs/card-image) | `GET /{kind}/{card}/card.png` | directory | `public` / `fetch` | Read a 1200 by 630 PNG for a card’s social preview. |
+| [`logo`](https://veil.rip/docs/logo) | `GET /{kind}/{n}/logo.{format}` | directory | `public` / `fetch` | Read the image currently published on a person’s or organisation’s card. |
+| [`widget`](https://veil.rip/docs/widget) | `GET /{kind}/{card}/embed` | directory | `public` / `frame` | Show a read-only card that verifies itself in the visitor’s browser. |
+| [`embed-loader`](https://veil.rip/docs/embed-loader) | `GET /embed.js` | directory | `public` / `fetch` | Turn data-veil-card and data-veil-org elements into card frames. |
+| [`preview-image`](https://veil.rip/docs/preview-image) | `GET /preview.png` | directory | `public` / `fetch` | Read the general directory preview image. |
+| [`verify-page`](https://veil.rip/docs/verify-page) | `GET /verify` | directory | `public` / `navigation` | Open a message check that runs in the reader’s browser. |
+| [`verify-link`](https://veil.rip/docs/verify-link) | `GET /v/{n}/{signature}` | directory | `public` / `navigation` | Share a signed message with a server-generated social preview. |
+| [`snippet-builder`](https://veil.rip/docs/snippet-builder) | `GET /embed` | directory | `public` / `frame` | Copy a card link, badge or widget with a live preview. |
 
 ## Transparency log
 
-| id | Method | Path | Base | Access | Summary |
-|---|---|---|---|---|---|
-| log-state | GET | `/v1/log` | directory | public | Active log, checkpoint and witness state seen by the server |
-| log-about | GET | `/{log}/` | log | public (page) | Log origin, verification key, daily request allowance, contact |
-| log-checkpoint | GET | `/{log}/checkpoint` | log | public | Signed size and Merkle root |
-| log-policy | GET | `/{log}/policy` | log | public | Log key, witness keys, quorum rule |
-| log-witnesses | GET | `/{log}/witnesses` | log | public | Each witness's latest stored cosignature |
-| log-hash-tiles | GET | `/{log}/tile/{level}/{index}` (also `.p/{width}`) | log | public | C2SP hash tiles for inclusion/consistency proofs |
-| log-entry-tiles | GET | `/{log}/tile/entries/{index}` (also `.p/{width}`) | log | public | C2SP bundles of public log entries |
+| ID | Method and path | Base | Access / browser | Purpose |
+|---|---|---|---|---|
+| [`log-state`](https://veil.rip/docs/log-state) | `GET /v1/log` | directory | `public` / `fetch` | Identify the active log and read the checkpoint and witness state seen by the server. |
+| [`log-about`](https://veil.rip/docs/log-about) | `GET /{log}/` | log | `public` / `navigation` | Read the log origin, verification key, daily request allowance and contact. |
+| [`log-checkpoint`](https://veil.rip/docs/log-checkpoint) | `GET /{log}/checkpoint` | log | `public` / `fetch` | Read the log’s signed size and Merkle root. |
+| [`log-policy`](https://veil.rip/docs/log-policy) | `GET /{log}/policy` | log | `public` / `fetch` | Read the log key, witness keys and quorum rule. |
+| [`log-witnesses`](https://veil.rip/docs/log-witnesses) | `GET /{log}/witnesses` | log | `public` / `fetch` | Read each configured witness’s latest stored cosignature. |
+| [`log-hash-tiles`](https://veil.rip/docs/log-hash-tiles) | `GET /{log}/tile/{level}/{index}` | log | `public` / `fetch` | Read C2SP hash tiles for inclusion and consistency proofs. |
+| [`log-entry-tiles`](https://veil.rip/docs/log-entry-tiles) | `GET /{log}/tile/entries/{index}` | log | `public` / `fetch` | Read C2SP bundles of public log entries. |
 
-`{log}` is the log's path segment on `https://log.veil.rip`; read the origin from `GET /v1/log` or the log's `about` page (`https://log.veil.rip/`) rather than guessing it.
+## Developer API keys
+
+| ID | Method and path | Base | Access / browser | Purpose |
+|---|---|---|---|---|
+| [`developer-account`](https://veil.rip/docs/developer-account) | `GET /v1/developer/accounts/{n}` | directory | `signed` / `local-or-server` | Read shared limits, quota balances, usage, keys and private activity. |
+| [`developer-keys`](https://veil.rip/docs/developer-keys) | `GET /v1/developer/accounts/{n}/keys` | directory | `signed` / `local-or-server` | List key metadata without revealing secrets. |
+| [`create-api-key`](https://veil.rip/docs/create-api-key) | `POST /v1/developer/accounts/{n}/keys` | directory | `signed` / `local-or-server` | A person or organisation owner signs the request to issue a secret bearer key. |
+| [`revoke-api-key`](https://veil.rip/docs/revoke-api-key) | `DELETE /v1/developer/accounts/{n}/keys/{id}` | directory | `signed` / `local-or-server` | Permanently stop a key owned by this card. |
+| [`api-key-audit`](https://veil.rip/docs/api-key-audit) | `GET /v1/developer/accounts/{n}/audit` | directory | `signed` / `local-or-server` | Inspect management receipts and the original device signatures. |
+| [`rate-limit`](https://veil.rip/docs/rate-limit) | `GET /v1/rate-limit` | directory | `api-key` / `local-or-server` | Read your current owner and key quotas without spending the primary allowance. |
 
 ## Manage a card
 
-All need the owner's device key unless noted. Never handle owner private keys (see `signed-requests.md`).
-
-| id | Method | Path | Access | Summary |
+| ID | Method and path | Base | Access / browser | Purpose |
 |---|---|---|---|---|
-| create-person | POST | `/v1/identities` | signed | Publish first record, signed by the key named in it |
-| publish-person | POST | `/v1/identities/{n}/versions` | signed | Change keys, linked accounts, alias, other signed fields |
-| create-organisation | POST | `/v1/organizations` | signed | First org record, signed by founder's active person key |
-| publish-organisation | POST | `/v1/organizations/{n}/versions` | signed | Org change authorised by accepted owner/admin; role rules apply |
-| salt-ticket | POST | `/v1/salt-tickets` | public-write | Server half of first-version salt, before device picks its half |
-| start-link | POST | `/v1/links/start` | signed | Begin OAuth, email, domain or Fediverse proof |
-| complete-link | POST | `/v1/links/{state}/complete` | signed | Complete a proof with the same key that started it |
-| link-state | GET | `/v1/links/{state}` | private-code | Resume a proof with its secret state token |
-| oauth-callback | GET | `/v1/links/callback/{platform}` | provider-callback | Redirect target for Veil's Discord/GitHub OAuth app |
-| request-device | POST | `/v1/device-requests` | public-write | Temporary pairing code for a new device's public key |
-| read-device-request | GET | `/v1/device-requests/{code}` | signed | Read a pairing request with an active person key |
-| invite-accept | POST | `/v1/orgs/{n}/invites/{id}/accept` | signed | Invited person accepts; body has nonce and timestamp |
-| invite-decline | POST | `/v1/orgs/{n}/invites/{id}/decline` | signed | Invited person declines; body has nonce and timestamp |
-| cancel-takeover | POST | `/v1/takeovers/{id}/cancel` | signed | Current account holder cancels an open transfer |
-| logo-preview-create | POST | `/v1/logo-previews` | signed | Validate a profile image/org logo before publishing |
-| logo-preview-read | GET | `/v1/logo-previews/{hash}.{format}` | private-code | Temporary image via preview URL returned to creator |
-| request-erasure | POST | `/v1/identities/{n}/erase` | signed | Active person key or org owner requests erasure (24h cancellation window) |
-| cancel-erasure | POST | `/v1/identities/{n}/erase/cancel` | signed | Authorised key cancels pending erasure |
-| submit-report | POST | `/v1/identities/{n}/reports` | signed | Active person key reports a card |
+| [`create-person`](https://veil.rip/docs/create-person) | `POST /v1/identities` | directory | `signed` / `local-or-server` | Publish the first record, signed by the key named in that record. |
+| [`publish-person`](https://veil.rip/docs/publish-person) | `POST /v1/identities/{n}/versions` | directory | `signed` / `local-or-server` | Change keys, linked accounts, alias or other signed card fields. |
+| [`create-organisation`](https://veil.rip/docs/create-organisation) | `POST /v1/organizations` | directory | `signed` / `local-or-server` | Publish an organisation’s first record, signed by its founder’s active person key. |
+| [`publish-organisation`](https://veil.rip/docs/publish-organisation) | `POST /v1/organizations/{n}/versions` | directory | `signed` / `local-or-server` | Publish a change authorised by an accepted owner or administrator. Role rules still apply. |
+| [`salt-ticket`](https://veil.rip/docs/salt-ticket) | `POST /v1/salt-tickets` | directory | `public-write` / `local-or-server` | Commit the server’s half of the first-version salt before the device chooses its half. |
+| [`start-link`](https://veil.rip/docs/start-link) | `POST /v1/links/start` | directory | `signed` / `local-or-server` | Begin OAuth, email, domain or Fediverse proof for a card you can manage. |
+| [`complete-link`](https://veil.rip/docs/complete-link) | `POST /v1/links/{state}/complete` | directory | `signed` / `local-or-server` | Complete a proof using the same key that started it. |
+| [`link-state`](https://veil.rip/docs/link-state) | `GET /v1/links/{state}` | directory | `private-code` / `local-or-server` | Resume a proof with its secret state token. |
+| [`oauth-callback`](https://veil.rip/docs/oauth-callback) | `GET /v1/links/callback/{platform}` | directory | `provider-callback` / `local-or-server` | Receive the redirect from Veil’s configured Discord or GitHub application. |
+| [`request-device`](https://veil.rip/docs/request-device) | `POST /v1/device-requests` | directory | `public-write` / `local-or-server` | Create a temporary pairing code for a new device’s public key. |
+| [`read-device-request`](https://veil.rip/docs/read-device-request) | `GET /v1/device-requests/{code}` | directory | `signed` / `local-or-server` | Read a pairing request with an active person key before adding the new device. |
+| [`invite-accept`](https://veil.rip/docs/invite-accept) | `POST /v1/orgs/{n}/invites/{id}/accept` | directory | `signed` / `local-or-server` | The invited person signs with an active key. The JSON body contains nonce and timestamp. |
+| [`invite-decline`](https://veil.rip/docs/invite-decline) | `POST /v1/orgs/{n}/invites/{id}/decline` | directory | `signed` / `local-or-server` | The invited person signs with an active key. The JSON body contains nonce and timestamp. |
+| [`cancel-takeover`](https://veil.rip/docs/cancel-takeover) | `POST /v1/takeovers/{id}/cancel` | directory | `signed` / `local-or-server` | The current account holder signs to cancel an open transfer. |
+| [`logo-preview-create`](https://veil.rip/docs/logo-preview-create) | `POST /v1/logo-previews` | directory | `signed` / `local-or-server` | Validate a profile image or organisation logo before including it in a signed record. |
+| [`logo-preview-read`](https://veil.rip/docs/logo-preview-read) | `GET /v1/logo-previews/{hash}.{format}` | directory | `private-code` / `local-or-server` | Read a temporary image using the preview URL returned to its creator. |
+| [`request-erasure`](https://veil.rip/docs/request-erasure) | `POST /v1/identities/{n}/erase` | directory | `signed` / `local-or-server` | An active person key or an organisation owner signs the erasure request. There is a 24-hour cancellation window. |
+| [`cancel-erasure`](https://veil.rip/docs/cancel-erasure) | `POST /v1/identities/{n}/erase/cancel` | directory | `signed` / `local-or-server` | An active authorised key cancels erasure during its cancellation window. |
+| [`submit-report`](https://veil.rip/docs/submit-report) | `POST /v1/identities/{n}/reports` | directory | `signed` / `local-or-server` | An active person key submits a moderation report about a card. |
 
 ## Service reference
 
-| id | Method | Path | Access | Summary |
+| ID | Method and path | Base | Access / browser | Purpose |
 |---|---|---|---|---|
-| catalogue | GET | `/v1/integrations` | public | Guides and endpoint index as JSON (has `revision`) |
-| catalogue-entry | GET | `/v1/integrations/{id}` | public | One guide or endpoint contract with examples |
+| [`catalogue`](https://veil.rip/docs/catalogue) | `GET /v1/integrations` | directory | `public` / `fetch` | Read the guides and endpoint index as JSON. |
+| [`catalogue-entry`](https://veil.rip/docs/catalogue-entry) | `GET /v1/integrations/{id}` | directory | `public` / `fetch` | Read one guide or endpoint contract, including examples. |
 
-Staff-only administration APIs exist but are outside the integration reference.
-
----
+Public CORS does not allow bearer or device-signing credentials. [API keys](api-keys.md) describes the six developer endpoints and their access requirements. Private staff routes are outside this catalogue.
 
 ## Detailed contracts
 
-Captured from the docs pages. Anything not listed here: use `scripts/veil.py doc <id>`.
+Captured from the docs pages. For the full field tables, nested types and errors, use `python scripts/veil.py doc <id>`.
 
 ### GET /v1/lookup
 Exactly one query param. Errors: `400 invalid_parameter`, `404 not_found`.
@@ -135,16 +145,16 @@ Exactly one query param. Errors: `400 invalid_parameter`, `404 not_found`.
 - `key` Ed25519 public key in hex, or full composite key in base64 (URL-encode)
 - `fingerprint` 12 words (English or Italian) or 60 digits
 
-Response: `identity` (short card), `match` (normalised query), `takeover` (pending transfer, when present). Then fetch the full card for its proof.
+Response: `identity` (short card), `match.by` and `match.value` (normalised query), and nullable `takeover` with `toIdentity`, `openedAt` and `resolvesAt`. Then fetch the full card for its proof.
 
 ### GET /u/{card}.json and /o/{card}.json
-`card` = permanent number or current alias. Without `.json`, send `Accept: application/json`. `/v1/identities/{n}` and `/v1/organizations/{n}` require the permanent number. Person card has `n, id, url, type, keys, links, proof, historyBefore`. Organisation JSON `type` is `organization`; includes members, logo, signed record, proof. Errors: `404 not_found`, `410 erased` (public tombstone), `503 log_unavailable` (person card).
+`card` = permanent number or current alias. Without `.json`, send `Accept: application/json`. `/v1/identities/{n}` and `/v1/organizations/{n}` require the permanent number. Person card has `n, id, url, type, keys, links, proof, historyBefore`. Organisation JSON `type` is `organization`; includes members, logo, signed record, proof. Errors include `404 not_found` and `410 erased` (public receipt). A successful response can have `proof: null` when current log verification is unavailable; keep it unverified.
 
 ### GET /v1/identities/{n}/summary
-Fields: `n, url, name, initials, type, version, keys, orgs, badges, nameHidden, logo`. Errors `404`, `410`.
+Fields include `n, url, name, initials, type, version, keys, orgs, badges, nameHidden, logo, alias, aliasUrl`. `nameHidden` is a boolean and `logo` can be null. Errors `404`, `410`.
 
 ### GET /v1/aliases/{kind}/{alias}
-`kind` is `u` or `o`. `alias`: 3-32 ASCII letters/digits/hyphen/underscore, starts with a letter, ends with letter or digit. Response: `available`, `status`, `identity` when claimed, `quarantineDays`, `reusableAt`, `reservedFor`. Availability does not reserve a name. Error `400 invalid_parameter`.
+`kind` is `u` or `o`. `alias`: 3-32 ASCII letters/digits/hyphen/underscore, starts with a letter, ends with letter or digit. Response: `available`, `status`, `identity` when claimed, `quarantineDays`, `reusableAt`, `reservedFor`. Availability does not reserve a name. Errors include `400 invalid_parameter` and `400 invalid_alias`.
 
 ### GET /v1/platforms
 Returns `platforms` with IDs, translated labels, methods, availability, organisation support. Use it to build account-linking choices.
@@ -156,11 +166,11 @@ Returns `platforms` with IDs, translated labels, methods, availability, organisa
 Query `t` = Unix seconds (default now; range 0..253402300799). Response: `at, active, reason, validFrom, validUntil`; reason is `active`, `not_yet_valid` or `revoked`.
 
 ### POST /v1/verify
-No request-signing headers. JSON body, either:
+No device-signing headers. An optional bearer key needs `verify` scope. JSON body, either:
 - block mode: `block` (full pasted signature block, max 32768 chars), optional `at` (Unix seconds, default now). Cannot be combined with `key/message/signature/platform/subject`.
 - raw mode: `key`, `message` (exact UTF-8 text), `signature` (Ed25519 hex; composite keys and signatures base64), optional pair `platform` + `subject` to check account ownership at `at`.
 
-Response: `valid` (overall), `signatureOk`, `identity`, `device`, `keyState`, `account`, `reason`; block mode also returns the parsed block and matching key. Errors: `400 invalid_block`, `400 invalid_parameter`. Use `fetch(..., {credentials: "omit"})` from browsers.
+Response: `valid` (overall), `signatureOk`, `identity`, `device`, `keyState`, `account`, `reason`; block mode also returns the parsed block and a matching key when one is found. HTTP 200 includes `valid: false`; use the fields to decide whether verification succeeded. Errors: `400 invalid_block`, `400 invalid_parameter`. Use `fetch(..., {credentials: "omit"})` from browsers.
 
 Share links (from the guide): with `message` and `signatureBytes` from the signer and `cardNumber`:
 ```js
@@ -217,3 +227,13 @@ Signed. Body: `identity` (permanent number), `platform` (ID from `/v1/platforms`
 <script src="https://veil.rip/embed.js" async></script>
 ```
 CSP: allow `frame-src https://veil.rip`, and `script-src https://veil.rip` if using `embed.js`. Options: `data-theme`, `data-lang`. The SVG badge reports server status at generation time and may be cached; the widget verifies in each visitor's browser.
+
+### Developer API responses
+
+Read [API keys and shared quotas](api-keys.md) for management access, pagination and the quota response. An owner overview includes `owner`, `suspended`, `limits`, `quota`, `usage`, `history`, `keys`, `next`, `audit` and `permissions`. Secret material is never returned by overview or list calls. Creation alone returns a one-time `secret` with key metadata.
+
+The quota endpoint returns HTTP 200 with `owner`, `key`, `quota`, `rate`, `resource` and `retryAfter`. Its status read does not spend the primary allowance. Minute buckets refill continuously and daily caps reset at midnight UTC.
+
+### GET /v1/integrations and /{id}
+
+Optional `lang=en|it`. The index has `revision`, `language`, `baseUrl`, `documentationUrl`, `groups` and entry summaries. A detail has `revision`, `language` and `entry`. Endpoint entries expose `responses`, `responseObjects`, `responseHeaders` and `errorDetails`, plus request parameters and existing summaries. A matching `If-None-Match` returns 304 with no body. Cache by revision, entry and language; the public reference can be cached for five minutes.
