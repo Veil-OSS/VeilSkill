@@ -1,6 +1,6 @@
 # Veil endpoint reference
 
-Snapshot of [the live catalogue](https://veil.rip/v1/integrations), revision `6e91849bbb93df7c`, reviewed 27 October 2026. It contains **65 endpoints and 10 guides**. Each endpoint ID is its docs slug and the key for `GET /v1/integrations/{id}`.
+Snapshot of [the live catalogue](https://veil.rip/v1/integrations), revision `ac404ba0656c014a`, reviewed 27 October 2026. It contains **65 endpoints and 10 guides**. Each endpoint ID is its docs slug and the key for `GET /v1/integrations/{id}`.
 
 The detail JSON contains response status, content type, fields, nested objects, headers, selected examples and error recovery guidance. Read [responses and errors](responses-and-errors.md) before relying on an HTTP status or parsing a body. Fetch a current detail with `python scripts/veil.py doc <id>`.
 

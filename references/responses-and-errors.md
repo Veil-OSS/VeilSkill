@@ -37,6 +37,8 @@ HTTP 200 means the call was processed. Inspect its data before making an authori
 
 Read `Content-Type` before choosing a parser. Cards and API results use JSON; images, scripts, signed log notes and tiles have other types. OAuth callbacks return HTML even on failure. Raw resources on the log host use their own protocol. Proxies or the CDN can return HTML errors too.
 
+Published PNG image URLs accept `size=64` or `size=128` for a smaller display thumbnail. Keep the current `v` hash from `logo.url`. Small images and animated APNGs may retain their original bytes; omit `size` to obtain the exact published image. Use the original SVG/GIF URLs; GIF and APNG animation is preserved. A derivative is presentation data; verify the original bytes in the signed record. [Image contract](https://veil.rip/docs/logo).
+
 The client pretty-prints JSON and text. Use `--output` for exact bytes of an image or tile; an HTTP error never overwrites that output file.
 
 ## Error envelope
