@@ -4,9 +4,9 @@ Sources: [API-key guide](https://veil.rip/docs/api-keys), [quota contract](https
 
 ## Obtain and store a key
 
-Open [API keys](https://veil.rip/developers), available from the active profile menu. A person manages their own card; an organisation requires an accepted owner. An active device signs management requests.
+Open [API keys](https://veil.rip/developers), available from the active profile menu. A person manages their own card, and an organisation requires an accepted owner. An active device signs management requests.
 
-Choose a label of 1 to 60 characters, `read` and/or `verify` scope, and expiry from 1 to 365 days (default 90). Each owner can have 20 unexpired, unrevoked keys, including suspended keys. Creation returns HTTP 201 with `key` metadata and `secret`. The secret appears once; the server stores its SHA-256 hash.
+Choose a label of 1 to 60 characters, `read` and/or `verify` scope, and expiry from 1 to 365 days (default 90). Each owner can have 20 unexpired, unrevoked keys, including suspended keys. Creation returns HTTP 201 with `key` metadata and `secret`. The secret appears once, and the server stores only its SHA-256 hash.
 
 Keep the bearer secret in server configuration. Never put it in a URL, repository, frontend bundle or shared output. A device's private signing key stays on that device. To use the bundled client, supply only the environment variable's name:
 
@@ -15,17 +15,17 @@ python scripts/veil.py --api-key-env VEIL_API_KEY platforms
 python scripts/veil.py --api-key-env VEIL_API_KEY --include-headers quota
 ```
 
-The client does not create keys or execute signed management calls. `--dry-run` redacts bearer credentials. A key must be sent to the configured API origin over HTTPS; loopback HTTP is available for local development. Authenticated redirects to another origin are refused.
+The client does not create keys or execute signed management calls. `--dry-run` redacts bearer credentials. A key must be sent to the configured API origin over HTTPS. Loopback HTTP is available for local development. Authenticated redirects to another origin are refused.
 
 ## Shared limits
 
 | Allowance | Default | Behaviour |
 |---|---|---|
 | Owner requests | 600 per minute | One bucket shared by every key of a permanent card |
-| Owner verification | 120 per minute | Additional bucket; verification spends both |
-| Per-key cap | Unset | Additional constraint; never adds to the owner total |
+| Owner verification | 120 per minute | Additional bucket. Verification spends both |
+| Per-key cap | Unset | Additional constraint that never adds to the owner total |
 | Owner UTC-day cap | Unset | Additional constraint resetting at midnight UTC |
-| Outer API-key guard | 3000 per minute per IP | Still applies with owner quotas; authentication concurrency is bounded |
+| Outer API-key guard | 3000 per minute per IP | Still applies with owner quotas. Authentication concurrency is bounded |
 
 Minute buckets refill continuously and can admit a burst up to the available balance. Counters survive restarts. Creating or rotating keys never resets the owner's allowance. Staff can set custom owner limits and additional key/daily caps according to role. API keys do not raise signed-write, card-creation, pairing or account-linking limits.
 
@@ -44,7 +44,7 @@ Admitted requests count even when an endpoint later returns an error. Quota reje
 | `quota.daily` | UTC-day cap, or null |
 | `quota.key` | Additional key cap, or null |
 | `rate`, `resource` | Bucket described by the response headers |
-| `retryAfter` | Seconds until admission is possible; can be positive with HTTP 200 on this status call |
+| `retryAfter` | Seconds until admission is possible. It can be positive with HTTP 200 on this status call |
 
 Each bucket has `limit`, `remaining` and `resetAt`. The reset time is Unix seconds when the bucket would be full without more requests, or the next UTC midnight for a daily cap. It is not a fixed minute boundary.
 
@@ -64,20 +64,20 @@ All of these require a device signature, not the bearer secret. Read their live 
 | `revoke-api-key` | `DELETE /v1/developer/accounts/{n}/keys/{id}` | Revoked key metadata |
 | `api-key-audit` | `GET /v1/developer/accounts/{n}/audit` | `owner`, `events`, `next` |
 
-Key and audit pages take `before` and `limit` (1 to 100, default 50). Continue with returned `next` as `before` until null. The overview initially has at most 50 keys and 20 audit events. Management writes accept at most 8 KiB and reject unknown fields; `nonce` and `timestamp` remain common signing fields.
+Key and audit pages take `before` and `limit` (1 to 100, default 50). Continue with returned `next` as `before` until null. The overview initially has at most 50 keys and 20 audit events. Management writes accept at most 8 KiB and reject unknown fields. `nonce` and `timestamp` remain common signing fields.
 
 Receipts contain actor, action, reason, details and the exact signed method/path/body/public key/algorithm/signature. They do not contain the bearer secret and are not published in the identity log. Usage is aggregate, without message text, lookup queries or IP addresses.
 
 ## Rotation and restrictions
 
-Create a replacement, update the integration and revoke the old key. Revocation is permanent. Revoking a device does not revoke the API keys it issued; inspect receipts and revoke affected integrations after a device compromise.
+Create a replacement, update the integration and revoke the old key. Revocation is permanent. Revoking a device does not revoke the API keys it issued. Inspect receipts and revoke affected integrations after a device compromise.
 
 | HTTP | Code | Action |
 |---|---|---|
 | 401 | `invalid_api_key` | Replace a malformed, unknown, expired or revoked credential |
 | 403 | `api_key_scope` | Use the required scope or the endpoint's device-signing flow |
 | 403 | `api_key_suspended` | Ask authorised staff to restore the key |
-| 403 | `developer_suspended` | Resolve the owner-account restriction; another key cannot bypass it |
+| 403 | `developer_suspended` | Resolve the owner-account restriction. Another key cannot bypass it |
 | 409 | `api_key_limit` | Revoke an unused key before creating another |
 | 429 | `rate_limited` | Respect `Retry-After` and coordinate workers sharing the allowance |
 

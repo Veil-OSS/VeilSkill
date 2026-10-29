@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Veil client: stdlib-only CLI for every public Veil read and message verification.
+Veil client: stdlib-only CLI for every public Veil read and message verification,
+including the reads of log format 2 (authority, statements, labels, members, set paths).
 Signed writes are intentionally NOT implemented: they need the owner's private
 device key, which this tool never touches.
 
@@ -21,7 +22,7 @@ import urllib.parse
 import urllib.request
 
 BASE = "https://veil.rip"
-UA = "veil-skill-client/1.1"
+UA = "veil-skill-client/1.2"
 MAX_WAIT = 30
 
 
@@ -167,6 +168,10 @@ def emit(result, output=None, include_headers=False):
     print(text)
 
 
+def seg(value):
+    return urllib.parse.quote(str(value), safe="")
+
+
 def q(**params):
     clean = {k: v for k, v in params.items() if v is not None}
     return ("?" + urllib.parse.urlencode(clean)) if clean else ""
@@ -207,6 +212,19 @@ def main():
     s = sub.add_parser("proof", help="inclusion proof for a version"); s.add_argument("n"); s.add_argument("k")
     s = sub.add_parser("events", help="account events"); s.add_argument("n"); s.add_argument("--after", type=int)
     s = sub.add_parser("takeovers", help="account transfers"); s.add_argument("identity")
+    s = sub.add_parser("version", help="format 2: one version whole"); s.add_argument("n"); s.add_argument("v")
+    s = sub.add_parser("authority", help="format 2: versions that changed who can sign"); s.add_argument("n")
+    s.add_argument("--after", type=int); s.add_argument("--limit", type=int)
+    s = sub.add_parser("statements", help="format 2: next page of staff statements (follow index.statementsNext)"); s.add_argument("n")
+    s.add_argument("--from", dest="start", type=int, required=True, help="prev of the last statement already read")
+    s.add_argument("--size", type=int, required=True, help="checkpoint size of the card's index bundle")
+    s = sub.add_parser("labels", help="format 2: the chain of labels"); s.add_argument("n")
+    s.add_argument("--after", type=int); s.add_argument("--limit", type=int)
+    s = sub.add_parser("members", help="format 2: one page of an organisation's members"); s.add_argument("n")
+    s.add_argument("--prefix", help="standard base64 of the prefix bytes"); s.add_argument("--bits", type=int)
+    s = sub.add_parser("set-path", help="format 2: sparse Merkle path of one state item"); s.add_argument("n")
+    s.add_argument("set", choices=["keys", "links", "orgs", "members"])
+    s.add_argument("--key", required=True, help="public key, platform and subject joined by a newline, or a card token")
     sub.add_parser("log", help="directory log state")
     s = sub.add_parser("catalogue", help="machine-readable endpoint index")
     s.add_argument("--lang", choices=["en", "it"])
@@ -271,6 +289,12 @@ def main():
     elif c == "proof": get(f"/v1/identities/{a.n}/versions/{a.k}/proof")
     elif c == "events": get(f"/v1/identities/{a.n}/events" + q(after=a.after))
     elif c == "takeovers": get("/v1/takeovers" + q(identity=a.identity))
+    elif c == "version": get(f"/v1/identities/{seg(a.n)}/versions/{seg(a.v)}")
+    elif c == "authority": get(f"/v1/identities/{seg(a.n)}/authority" + q(after=a.after, limit=a.limit))
+    elif c == "statements": get(f"/v1/identities/{seg(a.n)}/statements" + q(**{"from": a.start, "size": a.size}))
+    elif c == "labels": get(f"/v1/identities/{seg(a.n)}/labels" + q(after=a.after, limit=a.limit))
+    elif c == "members": get(f"/v1/organizations/{seg(a.n)}/members" + q(prefix=a.prefix, bits=a.bits))
+    elif c == "set-path": get(f"/v1/identities/{seg(a.n)}/sets/{a.set}/path" + q(key=a.key))
     elif c == "log": get("/v1/log")
     elif c == "catalogue": get("/v1/integrations" + q(lang=a.lang))
     elif c == "quota": get("/v1/rate-limit")

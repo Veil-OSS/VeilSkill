@@ -220,6 +220,29 @@ class ClientTest(unittest.TestCase):
         self.assertEqual(0, r.returncode, r.stderr)
         self.assertEqual("/v1/integrations/errors?lang=it", calls[0]["path"])
 
+    def test_cli_builds_format_2_read_paths(self):
+        cases = [
+            (["version", "1", "1"], "/v1/identities/1/versions/1"),
+            (["authority", "1", "--after", "0", "--limit", "50"], "/v1/identities/1/authority?after=0&limit=50"),
+            (["statements", "1", "--from", "11", "--size", "412"], "/v1/identities/1/statements?from=11&size=412"),
+            (["labels", "1"], "/v1/identities/1/labels"),
+            (["members", "2", "--prefix", "gA==", "--bits", "1"], "/v1/organizations/2/members?prefix=gA%3D%3D&bits=1"),
+            (["set-path", "1", "links", "--key", "github\n109546049"], "/v1/identities/1/sets/links/path?key=github%0A109546049"),
+        ]
+        with server(ok) as (base, calls):
+            for args, path in cases:
+                with self.subTest(args=args):
+                    r = subprocess.run([sys.executable, str(ROOT / "scripts/veil.py"), "--base", base] + args, capture_output=True, text=True)
+                    self.assertEqual(0, r.returncode, r.stderr)
+                    self.assertEqual(path, calls[-1]["path"])
+                    self.assertEqual("GET", calls[-1]["method"])
+                    self.assertNotIn("Authorization", calls[-1]["headers"])
+
+    def test_statements_requires_the_cursor_from_the_card(self):
+        r = subprocess.run([sys.executable, str(ROOT / "scripts/veil.py"), "statements", "1"], capture_output=True, text=True)
+        self.assertEqual(2, r.returncode)
+        self.assertIn("--from", r.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
