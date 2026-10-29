@@ -11,7 +11,7 @@ Use `https://veil.rip` for the directory, `https://log.veil.rip` for the log and
 
 ## Start with the current contract
 
-The [live catalogue](https://veil.rip/v1/integrations) contains 71 endpoints and 10 guides (revision `97321eb55810004b`). `GET /v1/integrations/{id}` returns a localised entry and the catalogue revision. Its ID is also the documentation slug. Read the entry before implementing a call, and follow its access mode, parameters, response types and verification requirements.
+The [live catalogue](https://veil.rip/v1/integrations) contains 71 endpoints and 10 guides (revision `efed107fab862172`). `GET /v1/integrations/{id}` returns a localised entry and the catalogue revision. Its ID is also the documentation slug. Read the entry before implementing a call, and follow its access mode, parameters, response types and verification requirements.
 
 - `responses` gives HTTP status, content type, field names, types, descriptions and selected examples.
 - `responseObjects` describes nested types, and `responseHeaders` describes headers.

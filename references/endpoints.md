@@ -1,6 +1,6 @@
 # Veil endpoint reference
 
-Snapshot of [the live catalogue](https://veil.rip/v1/integrations), revision `97321eb55810004b`, reviewed 29 October 2026. It contains **71 endpoints and 10 guides**. Each endpoint ID is its docs slug and the key for `GET /v1/integrations/{id}`.
+Snapshot of [the live catalogue](https://veil.rip/v1/integrations), revision `efed107fab862172`, reviewed 29 October 2026. It contains **71 endpoints and 10 guides**. Each endpoint ID is its docs slug and the key for `GET /v1/integrations/{id}`.
 
 The detail JSON contains response status, content type, fields, nested objects, headers, selected examples and error recovery guidance. Read [responses and errors](responses-and-errors.md) before relying on an HTTP status or parsing a body. Fetch a current detail with `python scripts/veil.py doc <id>`.
 
@@ -53,7 +53,7 @@ The `proofs` and `signed-requests` guides still describe the format 1 record. Fo
 | [`events`](https://veil.rip/docs/events) | `GET /v1/identities/{n}/events` | directory | `public` / `fetch` | Read takeover and publication-reconciliation events for a card. |
 | [`takeovers`](https://veil.rip/docs/takeovers) | `GET /v1/takeovers` | directory | `public` / `fetch` | Read account transfer requests involving a card on either side. |
 | [`authority`](https://veil.rip/docs/authority) | `GET /v1/identities/{n}/authority` | directory | `public` / `fetch` | **Format 2.** Page through the versions that changed who can sign the card. |
-| [`statements`](https://veil.rip/docs/statements) | `GET /v1/identities/{n}/statements` | directory | `public` / `local-or-server` | **Format 2.** Page through a card's counted staff statements after the first page in `index.statements`. |
+| [`statements`](https://veil.rip/docs/statements) | `GET /v1/identities/{n}/statements` | directory | `public` / `fetch` | **Format 2.** Page through a card's counted staff statements after the first page in `index.statements`. |
 | [`labels`](https://veil.rip/docs/labels) | `GET /v1/identities/{n}/labels` | directory | `public` / `fetch` | **Format 2.** Read the chain of labels alone, up to 1000 a page. |
 | [`version-v2`](https://veil.rip/docs/version-v2) | `GET /v1/identities/{n}/versions/{v}` | directory | `public` / `fetch` | **Format 2.** Read one version whole: label, body, signature and log position. |
 | [`set-path`](https://veil.rip/docs/set-path) | `GET /v1/identities/{n}/sets/{set}/path` | directory | `public` / `fetch` | **Format 2.** Get the sparse Merkle path of one item, or of its empty place, to update a set root. |
