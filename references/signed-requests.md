@@ -1,13 +1,13 @@
 # Device-signed requests
 
-Source: https://veil.rip/docs/signed-requests plus the per-endpoint pages and the format 2 contract. Read this when preparing a card change, a signed pairing read or API-key management. Public reads and `POST /v1/verify` do not need a device signature.
+Source: https://veil.pub/docs/signed-requests plus the per-endpoint pages and the format 2 contract. Read this when preparing a card change, an account alert or a signed statement, a signed pairing read, or the management of API keys and sign-in apps. Public reads and `POST /v1/verify` do not need a device signature.
 
 ## Ground rules
 
 - An **active authorised device key** with the role its endpoint requires signs each management request. Never ask the user to paste a private key, never generate or store one on their behalf, and never send one to Veil. Prepare the unsigned version and request bytes, explain what must be signed, and let the owner sign on their own device.
 - Public CORS does not open device-signing headers to other websites. External clients use local or server flows. Veil's own pages sign with the enrolled browser device.
-- A publication is ready only after its log entry appears in a witnessed checkpoint. If a request times out, read the card's current versions before sending again.
-- Check `format` in `GET /v1/log` before you build a version. veil.rip is on format 2 since 28 October 2026, and a format 1 `record` sent there answers `400 wrong_format`.
+- A publication is ready only after its log entry appears in a witnessed checkpoint. If a request times out, read the card's current versions before sending again. With `Prefer: respond-async` the answer comes earlier, as a `202`, and the same rule holds: wait for `witnessed: true`.
+- Check `format` in `GET /v1/log` before you build a version. Veil is on format 2 since 28 October 2026, and a format 1 `record` sent there answers `400 wrong_format`.
 
 ## Request signature
 
@@ -41,6 +41,8 @@ Limits: 10 signed writes per minute per key, 30 writes per minute per IP, and se
 A bearer key cannot authorise these calls. A person manages their own card, and an organisation requires an accepted owner. Signed GET requests inspect the account, keys and private receipts. `POST /v1/developer/accounts/{n}/keys` creates a key and `DELETE /v1/developer/accounts/{n}/keys/{id}` revokes it for good.
 
 Creation takes `label`, optional `scopes` and `expiresInDays`, plus the common nonce and timestamp. HTTP 201 returns `key` metadata and `secret` once. Management writes accept at most 8 KiB and reject unknown fields. These actions produce private signed receipts and do not publish an identity version or a public log entry. Read [api-keys.md](api-keys.md) for the response shapes and lifecycle.
+
+The apps of Sign in with Veil are managed the same way, under `/v1/developer/accounts/{n}/oidc-clients`: a signed `GET` lists them, `POST` creates one, `PATCH` and `DELETE` on `/{id}` change and remove it, and `POST /{id}/secret` issues a new secret. Read [sign-in.md](sign-in.md).
 
 ## A version in format 2
 
@@ -78,6 +80,44 @@ Creation takes `label`, optional `scopes` and `expiresInDays`, plus the common n
 | body | `{"op":"removeLink","platform","subject"}` | Any active key |
 | body | `{"op":"joinOrg","org","role","grant"}` | Any active key, with the grant from accepting the invitation |
 | body | `{"op":"leaveOrg","org"}` | Any active key |
+| body | `{"op":"addExternalKey","type","pub","fp","label","proof"}` | Any active key, with the proof of possession below |
+| body | `{"op":"removeExternalKey","fp"}` | Any active key |
+
+### Keys from elsewhere
+
+Since 29 October 2026 a person's card can hold public keys from other systems, each with a proof that the person holds the private half. These keys sign nothing of Veil's. They let a reader find a person's SSH, OpenPGP or minisign key on the card and check a file signed with it. Organisations have none, and version 1 cannot carry one.
+
+- `type`: `ssh-ed25519`, `ssh-ecdsa-p256`, `ssh-ecdsa-p384`, `ssh-rsa`, `pgp`, `minisign`, `ed25519`, `ml-dsa-44`, `ml-dsa-65` or `ml-dsa-87`.
+- `pub`: the key in its one spelling. SSH is the OpenSSH type, a space and the base64 blob, without the comment. minisign is the base64 line of its 42 bytes. Ed25519 is 64 lowercase hex digits. ML-DSA is the raw key in standard base64. OpenPGP is the standard base64 of the minimal version 4 key packets.
+- `fp`: the fingerprint as its own world writes it. SSH is `SHA256:` and the unpadded base64, as `ssh-keygen -l` prints it. minisign is the key ID in 16 uppercase hex digits. Ed25519 is the key itself in hex. ML-DSA is `SHA256:` of the raw key. OpenPGP is the version 4 fingerprint in 40 uppercase hex digits.
+- `label`: 1 to 40 characters.
+- `proof`: `{anchor, at, by, sig, variant?}`. `anchor` is the whole note of a cosigned checkpoint (at most 4096 characters), `at` the declared time in UTC to the second (`2026-10-29T10:00:00Z`), `by` the Ed25519 half in hex of the device key that signs the version, and `sig` the signature of the challenge in standard base64.
+
+The challenge is the text the key from elsewhere signs. It has one line per field and a line feed after each, the last included:
+
+```
+veil-rubrica:external-key:v1
+card <card number>
+key <fp>
+by <proof.by>
+at <proof.at>
+log <origin of the cited checkpoint>
+size <size of the cited checkpoint>
+root <root of the cited checkpoint, base64>
+```
+
+The card number and the device key tie the signature to this card and this browser. The cosigned checkpoint dates it: nobody can make the signature look older than the moment that root existed.
+
+| Key | How it signs the challenge |
+|---|---|
+| SSH | `ssh-keygen -Y sign -n veil -f <key> challenge.txt` (namespace `veil`) |
+| OpenPGP | `gpg --local-user <fingerprint> --armor --detach-sign`, or `gpg --clear-sign` |
+| minisign | `minisign -Sm challenge.txt`, with or without the prehash |
+| Ed25519, ML-DSA | The raw signature of the challenge bytes |
+
+A copy of the challenge that passed through Windows can have other bytes. `proof.variant` names the form that was signed when it is not the text above: `crlf`, `bom`, `noeol`, `bom+crlf`, `crlf+noeol`, `bom+noeol` or `bom+crlf+noeol`. A verifier rebuilds those exact bytes. A challenge is good for 7 days, and a card holds at most 16 such keys. The rejections are in [responses-and-errors.md](responses-and-errors.md#keys-from-elsewhere).
+
+Never paste a private key anywhere in this flow. The server refuses any text that holds private key material (`422 private_key_material`), and a key that was pasted by mistake should be treated as exposed.
 
 ### Organisation operations
 
@@ -116,8 +156,44 @@ The server checks, in order: shape, `identity`, `n`, `prev` and time, then the b
 - While an erasure is pending the card cannot publish (`409 erase_pending`).
 - An organisation's version waits (`409 version_conflict`) while the signing member's card has its own version pending in the log, and a person's version waits while an organisation version signed by that person is pending.
 - The request body may be up to 3 MiB on these four routes.
+- With `Prefer: respond-async` these routes answer `202` as soon as the log holds the entry, with `witnessed: false`, the final `logIndex`, and `publishedAt` and `checkpoint` null. Read `GET /v1/identities/{n}/versions/{v}` every 2 seconds until `witnessed` is true. A card can have at most 4 versions waiting. Without the header the answer is the `201` of before, once the witnesses cosigned.
 
 Canonical JSON: object keys sorted by UTF-16 code units, array order preserved, no whitespace outside strings, only integers in the JavaScript safe range, UTF-8 strings already in NFC, booleans and null. Do not normalise or trim signed text after signing. The outer request body need not be canonical.
+
+## Alerts and statements
+
+Since 30 October 2026 a card publishes two more kinds of signed entries. They are not versions: they change nothing about who can sign.
+
+- An **alert** is a person's word about one linked account. Statement: `{"platform", "since", "state", "subject", "time", "to", "type": "alert", "v": 1}`. `state` is `stolen` (with `since`, a date `YYYY-MM-DD`), `abandoned`, `moved` (with `to`, `{handle, subject}`) or `regained`, which ends the alert in force.
+- A **statement** is a published text. Statement: `{"link", "retracts", "text", "time", "title", "type": "statement", "v": 1}`, with a title of 1 to 200 characters, a text of 1 to 4000, an https link or `null`, and the id of the statement it retracts or `null`.
+
+`POST /v1/identities/{n}/alerts` and `POST /v1/identities/{n}/statements` take `statement`, `salt` (32 random bytes in 64 lowercase hex digits), `entry`, `nonce` and `timestamp`. The content stays out of the log. The entry commits to it:
+
+```json
+{"c": "<base64 of SHA-256(salt || canonical statement)>", "key": "<signing key>", "kind": "alert",
+ "signer": {"identity": "<signer token>", "n": 21}, "time": 1794000000, "token": "<card token>", "v": 2}
+```
+
+`entry` is `{"text": "<the canonical entry above>", "signature": "..."}`, and the signature covers `"veil-rubrica:card-entry:v2\n"` + text, made with the key in `X-Public-Key`. `kind` is `alert` or `statement`.
+
+- A person signs as the card itself, so `signer.identity` equals `token`. An alert accepts a device key or the recovery key, the one that is left when a device was stolen with the account. A statement needs a device key.
+- An organisation publishes statements through an `owner` or an `admin`, who signs with a key of their own card. `signer` names that member's card and current version. Organisations have no alerts.
+- At most 10 alerts and 10 statements per card in 24 hours, retractions included.
+- The answer is `201` with the item, its entry, `checkpoint` and `inclusion`. With `Prefer: respond-async` it is `202` with `witnessed: false`, and `GET /v1/statements/{id}` says when the witnesses cosigned.
+
+An alert or a statement has no chain in the index, so a server could stay silent about one. What a reader can prove is that an entry it was shown is real and signed by the card. The list is the server's word.
+
+## Other signed calls
+
+These use the same request signature and publish nothing in the log.
+
+- **Email notices:** `GET` and `PUT /v1/identities/{n}/notices` read and set a person's opt-in. Notices go to the card's oldest verified email address.
+- **Discord Linked Roles:** `POST /v1/discord/linked-roles/start`, then Discord's consent page, then `POST /v1/discord/linked-roles/{state}/complete`. `GET /v1/identities/{n}/discord-roles` lists the connections and `POST .../{discordId}/disconnect` ends one.
+- **Reports:** `POST /v1/identities/{n}/reports` with `category`, `text` and up to five links in `evidence`.
+- **Moving a browser's key:** `POST /v1/moves` and its three steps bring a key made on `veil.rip` to `veil.pub`. Veil's own pages run it.
+- **Takeovers:** `POST /v1/takeovers/{id}/cancel` stops a transfer inside its 7 days.
+
+[endpoints.md](endpoints.md) has their fields.
 
 ## A version in format 1
 
@@ -125,7 +201,7 @@ The earlier log `log.veil.rip/test-1` is frozen, so this shape matters only to r
 
 ## Typical flows in format 2
 
-**New card:** `POST /v1/salt-tickets` (public-write), draw the device's salt half, build the version 1 body and label, let the owner sign the label and the request, then `POST /v1/identities` with `label, body, signature, clientSalt, saltTicket, nonce, timestamp` (and `pictureData` with a picture). Success is `201` with `n, id, url, token, version, commitment, logIndex, publishedAt, checkpoint`.
+**New card:** `POST /v1/salt-tickets` (public-write), draw the device's salt half, build the version 1 body and label, let the owner sign the label and the request, then `POST /v1/identities` with `label, body, signature, clientSalt, saltTicket, nonce, timestamp` (and `pictureData` with a picture). Success is `201` with `n, id, url, token, version, commitment, logIndex, publishedAt, checkpoint, witnessed, sequencedAt`.
 
 **Link an account:** `POST /v1/links/start` with `{identity, platform, subject?, method?}` returns `201 {state, method, expiresAt, challenge}`. Keep `state` private. OAuth platforms redirect through `GET /v1/links/callback/{platform}`. Then `POST /v1/links/{state}/complete` with the same key returns the grant, and the next version carries `{"op":"addLink","platform","subject","display","grant"}`. Starting or completing a proof does not add the account by itself.
 
@@ -139,4 +215,4 @@ The earlier log `log.veil.rip/test-1` is frozen, so this shape matters only to r
 
 `422 invalid_op`, `422 label_mismatch`, `422 invalid_record`, `422 invalid_record_signature`, `401 missing_signature`, `403 signer_not_authorised`, `409 version_conflict` (read the versions again, rebuild and sign again), `409 salt_ticket_invalid`, `400 wrong_format`, `503 log_unavailable`, and the format 2 codes in [responses-and-errors.md](responses-and-errors.md#format-2-write-errors). Read the endpoint's `errorDetails` for recovery. After a timeout, check the current card or operation state before preparing another signed request.
 
-For exact per-endpoint bodies run `python scripts/veil.py doc <id>` (for example `publish-person` or `complete-link`). Their notes cover format 2, while their body tables still list the format 1 fields first.
+For exact per-endpoint bodies run `python scripts/veil.py doc <id>` (for example `publish-person`, `publish-alert` or `complete-link`). The body table of a version route lists the format 1 fields before the format 2 ones, so read the fields marked format 2.

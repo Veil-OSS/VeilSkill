@@ -1,10 +1,10 @@
 # Integration API keys
 
-Sources: [API-key guide](https://veil.rip/docs/api-keys), [quota contract](https://veil.rip/docs/rate-limit) and the per-endpoint JSON entries. Public reads and verification remain available without a key.
+Sources: [API-key guide](https://veil.pub/docs/api-keys), [quota contract](https://veil.pub/docs/rate-limit) and the per-endpoint JSON entries. Public reads and verification remain available without a key, at 300 requests per minute per IP.
 
 ## Obtain and store a key
 
-Open [API keys](https://veil.rip/developers), available from the active profile menu. A person manages their own card, and an organisation requires an accepted owner. An active device signs management requests.
+Open [API keys](https://veil.pub/developers), available from the active profile menu. A person manages their own card, and an organisation requires an accepted owner. An active device signs management requests.
 
 Choose a label of 1 to 60 characters, `read` and/or `verify` scope, and expiry from 1 to 365 days (default 90). Each owner can have 20 unexpired, unrevoked keys, including suspended keys. Creation returns HTTP 201 with `key` metadata and `secret`. The secret appears once, and the server stores only its SHA-256 hash.
 
@@ -63,6 +63,8 @@ All of these require a device signature, not the bearer secret. Read their live 
 | `create-api-key` | `POST /v1/developer/accounts/{n}/keys` | 201 with `key` and one-time `secret` |
 | `revoke-api-key` | `DELETE /v1/developer/accounts/{n}/keys/{id}` | Revoked key metadata |
 | `api-key-audit` | `GET /v1/developer/accounts/{n}/audit` | `owner`, `events`, `next` |
+
+The same page and the same signed routes manage the apps of Sign in with Veil (`oidc-clients`, `oidc-client-create`, `oidc-client-update`, `oidc-client-delete`, `oidc-client-secret`). Those apps do not use API keys. Read [sign-in.md](sign-in.md).
 
 Key and audit pages take `before` and `limit` (1 to 100, default 50). Continue with returned `next` as `before` until null. The overview initially has at most 50 keys and 20 audit events. Management writes accept at most 8 KiB and reject unknown fields. `nonce` and `timestamp` remain common signing fields.
 

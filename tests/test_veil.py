@@ -238,6 +238,69 @@ class ClientTest(unittest.TestCase):
                     self.assertEqual("GET", calls[-1]["method"])
                     self.assertNotIn("Authorization", calls[-1]["headers"])
 
+    def test_cli_builds_the_newer_read_paths(self):
+        cases = [
+            (["lookup", "--account", "github:Gabriele73"], "/v1/lookup?account=github%3AGabriele73"),
+            (["lookup", "--github", "109546049"], "/v1/lookup?github=109546049"),
+            (["alerts", "1"], "/v1/identities/1/alerts"),
+            (["card-statements", "o", "veil", "--before", "120", "--limit", "5"], "/o/veil/statements.json?before=120&limit=5"),
+            (["statement", "94"], "/v1/statements/94"),
+            (["keys-file", "gab"], "/u/gab/keys.txt"),
+            (["keys-file", "1", "--format", "allowed_signers", "--fp", "SHA256:a+b/c"], "/u/1/keys.txt?format=allowed_signers&fp=SHA256%3Aa%2Bb%2Fc"),
+            (["canary"], "/v1/canary"),
+            (["linked-roles"], "/v1/discord/linked-roles"),
+            (["openapi"], "/openapi.json"),
+        ]
+        with server(ok) as (base, calls):
+            for args, path in cases:
+                with self.subTest(args=args):
+                    r = subprocess.run([sys.executable, str(ROOT / "scripts/veil.py"), "--base", base] + args, capture_output=True, text=True)
+                    self.assertEqual(0, r.returncode, r.stderr)
+                    self.assertEqual(path, calls[-1]["path"])
+                    self.assertEqual("GET", calls[-1]["method"])
+
+    def test_lookup_takes_exactly_one_parameter(self):
+        r = subprocess.run([sys.executable, str(ROOT / "scripts/veil.py"), "lookup", "--account", "gab", "--github", "1"], capture_output=True, text=True)
+        self.assertEqual(2, r.returncode)
+        self.assertIn("not allowed with", r.stderr)
+
+    def test_file_verification_hashes_locally_and_sends_no_file_bytes(self):
+        content = b"release bytes that never leave this machine\n"
+        with tempfile.TemporaryDirectory() as folder, server(ok) as (base, calls):
+            artefact = Path(folder) / "veil-0.1.4-darwin-arm64.zip"
+            artefact.write_bytes(content)
+            sig = Path(folder) / "SHA256SUMS.veil"
+            sig.write_text("0000  veil-0.1.4-darwin-arm64.zip\n\u2014 Signed with Veil\nsig: test\n", encoding="utf-8")
+            r = subprocess.run([sys.executable, str(ROOT / "scripts/veil.py"), "--base", base, "verify", "--signature-file", str(sig), "--file", str(artefact), "--card", "1"], capture_output=True, text=True)
+            self.assertEqual(0, r.returncode, r.stderr)
+            body = json.loads(calls[0]["body"])
+            self.assertEqual("/v1/verify", calls[0]["path"])
+            self.assertEqual("POST", calls[0]["method"])
+            self.assertEqual({"signature", "sha256", "name", "card"}, set(body))
+            self.assertEqual(veil.hashlib.sha256(content).hexdigest(), body["sha256"])
+            self.assertEqual("veil-0.1.4-darwin-arm64.zip", body["name"])
+            self.assertEqual(sig.read_text(encoding="utf-8"), body["signature"])
+            self.assertNotIn(content, calls[0]["body"])
+
+    def test_file_verification_takes_a_given_hash_a_list_and_a_binary_signature(self):
+        with tempfile.TemporaryDirectory() as folder, server(ok) as (base, calls):
+            sig = Path(folder) / "SHA512SUMS.sig"
+            sig.write_bytes(b"\x89\x01\xff\x00")
+            sums = Path(folder) / "SHA512SUMS"
+            sums.write_text("ab  tool.tar.gz\n", encoding="utf-8")
+            r = subprocess.run([sys.executable, str(ROOT / "scripts/veil.py"), "--base", base, "verify", "--signature-file", str(sig), "--sha512", "AB", "--name", "tool.tar.gz", "--list-file", str(sums), "--format", "pgp", "--at", "1793260000"], capture_output=True, text=True)
+            self.assertEqual(0, r.returncode, r.stderr)
+            body = json.loads(calls[0]["body"])
+            self.assertEqual({"signature": "iQH/AA==", "sha512": "ab", "name": "tool.tar.gz", "list": "ab  tool.tar.gz\n", "format": "pgp", "at": 1793260000}, body)
+
+    def test_file_verification_needs_one_hash_and_a_signature(self):
+        script = str(ROOT / "scripts/veil.py")
+        for args in (["--sha256", "ab"], ["--signature-file", "x.sig"], ["--signature-file", "x.sig", "--sha256", "ab", "--sha512", "cd"], ["--signature-file", "x.sig", "--sha256", "ab", "--block", "b"]):
+            with self.subTest(args=args):
+                r = subprocess.run([sys.executable, script, "--base", "http://127.0.0.1:9", "verify"] + args, capture_output=True, text=True)
+                self.assertEqual(1, r.returncode)
+                self.assertIn("file mode", r.stderr)
+
     def test_statements_requires_the_cursor_from_the_card(self):
         r = subprocess.run([sys.executable, str(ROOT / "scripts/veil.py"), "statements", "1"], capture_output=True, text=True)
         self.assertEqual(2, r.returncode)

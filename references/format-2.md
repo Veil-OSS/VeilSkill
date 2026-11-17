@@ -1,10 +1,10 @@
 # Log format 2
 
-Read this when you verify a card in your own code, or when you parse `current`, `authority`, `state` or `index` from a card. The checks below are the ones Veil's own pages run in the reader's browser. Their code is public at `https://veil.rip/assets/veil-v2.js` and `https://veil.rip/assets/veil-index-rules.js`, and it is the reference when this page and your results disagree.
+Read this when you verify a card in your own code, or when you parse `current`, `authority`, `state` or `index` from a card. The checks below are the ones Veil's own pages run in the reader's browser. Their code is public at `https://veil.pub/assets/veil-v2.js` and `https://veil.pub/assets/veil-index-rules.js`, and it is the reference when this page and your results disagree.
 
 ## Which format is live
 
-Since 28 October 2026 veil.rip publishes to the log `log.veil.rip/staging-1` in format 2. `GET /v1/log` says so:
+Since 28 October 2026 Veil publishes to the log `log.veil.rip/staging-1` in format 2. The directory moved to `veil.pub` on 6 November 2026 and the log is read at `https://log.veil.pub`, but the origin keeps its name for the life of the log: it is signed into every checkpoint. `GET /v1/log` says so:
 
 ```json
 {"origin": "log.veil.rip/staging-1", "format": 2, "staffOrg": "d8aKGsTCN1U_lB3NznVocg", "quorum": 2, "of": 5, "...": "..."}
@@ -37,7 +37,7 @@ The cards were recreated on the new log. Card 1 (Gabriele Todaro, a person) and 
 | Closing of a card | Known from the server's 410 receipt | A signed closing entry that the reader checks |
 | Index | None | `{"kind":"index","root","size","v":2}` entries written by the log |
 | Card `proof` | `record`, `salt`, `commitment`, `signedBy`, `signature`, then entry, inclusion and checkpoint | `version`, `labelHash`, `entry`, `logIndex`, `leafHash`, `checkpoint`, `inclusion`, `witnesses` |
-| Extra card fields | None | `format`, `current`, `authority`, `authorityNext`, `state`, `index`, `standing` |
+| Extra card fields | None | `format`, `current`, `authority`, `authorityNext`, `state`, `index`, `standing`, and since 29 October 2026 `external`, `alerts`, `statements` and `waiting` |
 | Moderation shown | `moderation` as the server reports it | Computed from the verified chain in `index.statements` |
 | First visit | Reads and checks every version | Reads the card's index bundle, so the work does not grow with the history |
 
@@ -54,8 +54,9 @@ Every hash is SHA-256 over a domain prefix and the bytes below. Hashes inside la
 | Version signature | `"veil-rubrica:identity-version:v2\n"` + label |
 | Statement signature | `"veil-rubrica:statement-entry:v2\n"` + canonical entry without `signature` |
 | Closing signature | `"veil-rubrica:close-entry:v2\n"` + canonical entry without `signature` |
+| Alert or card statement signature | `"veil-rubrica:card-entry:v2\n"` + canonical entry without `signature` |
 | State head hash | `"veil-rubrica:state-head:v2\n"` + canonical `state.head` |
-| State root (`label.state`) | `"veil-rubrica:state:v2\n"` + the 32-byte body `salt` + state head hash + the roots of `keys`, `links`, `orgs` and `members`, in that order |
+| State root (`label.state`) | `"veil-rubrica:state:v2\n"` + the 32-byte body `salt` + state head hash + the roots of `keys`, `links`, `orgs` and `members`, in that order, then the root of `external` only when that set is not empty |
 | Position of a set item | `"veil-rubrica:set-key:v2\n"` + set name + `"\n"` + item key |
 | Leaf of a set item | `0x00` + `"veil-rubrica:item:v2\n"` + canonical item |
 | Position in the index | `"veil-rubrica:index-key:v2\n"` + card token |
@@ -63,13 +64,15 @@ Every hash is SHA-256 over a domain prefix and the bytes below. Hashes inside la
 | Tree node | `0x01` + left + right |
 | Empty leaf `E0` | `"veil-rubrica:empty:v2"`, with no newline. `E(h+1)` is the node of two `E(h)` |
 
-The item key is the public key for `keys`, the platform and the subject joined by a newline for `links`, the organisation token for `orgs` and the member token for `members`. An empty set has the root `0iTvZb61d0+WGpOq5FlPLH3fZhujnMR7aFF0k80vNvA=`.
+The item key is the public key for `keys`, the platform and the subject joined by a newline for `links`, the organisation token for `orgs`, the member token for `members` and the fingerprint `fp` for `external`. An empty set has the root `0iTvZb61d0+WGpOq5FlPLH3fZhujnMR7aFF0k80vNvA=`.
+
+The body `salt` is standard base64 of 32 bytes. A card without keys from elsewhere has no `external` root in its state root, so the cards of before 29 October 2026 kept their hashes. `state.roots.external` is present exactly when the set has items.
 
 The salt in the state root keeps names and device names out of reach of anyone who only reads the public entry. When a card is erased, the body and its salt are deleted and the entry reveals nothing more.
 
 ## Sparse Merkle proofs
 
-The four sets of a card's state and the index are sparse Merkle trees of depth 256.
+The sets of a card's state (`keys`, `links`, `orgs`, `members` and `external`) and the index are sparse Merkle trees of depth 256.
 
 - A position is 32 bytes. Bit `k`, from 0 to 255, is `(p[k / 8] >> (7 - k % 8)) & 1`, so bit 0 is the most significant bit of the first byte.
 - Leaves sit at height 0 and the root at height 256. Going from height `h` to `h + 1`, the current node is the left child when bit `255 - h` of the position is 0, and the right child when it is 1.
@@ -87,10 +90,27 @@ The four sets of a card's state and the index are sparse Merkle trees of depth 2
 | `current` | The current version: `label` and `body` as canonical texts (the exact signed bytes, never re-serialise them), `signature`, `signedBy`, `logIndex`, `publishedAt` and `entry`, the log entry text |
 | `authority` | The versions with a non-empty `auth` list, from version 1, at most 50. Each has the fields of `current` plus `i`, its log position, and `inclusion`, its RFC 6962 proof on the checkpoint of `index` |
 | `authorityNext` | The version to pass as `after` to `GET /v1/identities/{n}/authority`, or `null` when `authority` is complete |
-| `state` | The state after the current version: `head` (`alias`, `name`, `picture`, `type`), the whole `keys`, `links` and `orgs` sets, the first page of `members` (`prefix`, `bits`, `items`, `proof`, `pages`) and `roots` |
+| `state` | The state after the current version: `head` (`alias`, `name`, `picture`, `type`), the whole `keys`, `links`, `orgs` and `external` sets, the first page of `members` (`prefix`, `bits`, `items`, `proof`, `pages`) and `roots` |
 | `proof` | `version`, `labelHash` (base64), `entry`, `logIndex`, `leafHash` (hex), `checkpoint` (`size`, `root`, `note`), `inclusion` (hex) and `witnesses` |
 | `index` | The card's index bundle on the same checkpoint as `proof`, or `null` when the server could not read or check it |
 | `standing` | The log position of the card's latest staff statement as the server knows it, or `null`. The verified value is `index.value.standing` |
+| `external` | A person's keys from elsewhere, one item per key: `type`, `fp`, `label`, `pub`, `ids` (OpenPGP user IDs), `addedIn`, `since`, `logIndex`, `proofOk`, `anchor` (`origin`, `size`, `root`, `signedAt`) and `consistency` (`size`, `proof`) |
+| `alerts` | The account alerts in force, each with its statement, salt, signed entry and inclusion proof. `[]` without alerts |
+| `statements` | `{total, latest, url, feed}`: the count of published statements, the newest ones, the page and the Atom feed |
+| `waiting` | Versions the log holds that the witnesses have not cosigned yet. `[]` most of the time |
+
+## Keys from elsewhere
+
+`state.external` lists the keys as the signed state holds them: `{fp, label, proof, pub, since, type}`, ordered by `fp`. The top-level `external` is the same set with what the server checked. Check each key yourself:
+
+1. Recompute `fp` from `pub` and compare.
+2. Verify `proof.anchor` as a checkpoint note, with the log key and the witness quorum. Its freshness does not matter here: it only dates the proof.
+3. Rebuild the challenge from the card number, `fp`, `proof.by`, `proof.at` and the anchor's origin, size and root, in the form `proof.variant` names. [signed-requests.md](signed-requests.md#keys-from-elsewhere) has the text.
+4. Verify `proof.sig` over those bytes with the key in `pub`. SSH signatures use the namespace `veil`.
+5. `proof.by` must be a key of the card's authority at the version in `addedIn`.
+6. `consistency.proof` shows that the anchor's tree is a prefix of the checkpoint you verified for the card.
+
+`proofOk` is the server's result of these steps. A removed key leaves the set and `GET /v1/identities/{n}/keys?fp=...` answers 404 for it.
 
 The index bundle:
 
@@ -104,7 +124,7 @@ The index bundle:
  "statementsNext": null}
 ```
 
-These are card 1's values while the log had 4 entries. `entry` is the last index entry of the checkpoint, at position `i`, covering the entries before its `size`. `value` is `{"auth": [[i, n, c], ...], "closed": i | null, "latest": [i, n, c], "standing": i | null}`, where `i` is a log position, `n` a version number and `c` a label hash. `value` is `null` when the card is not in the index. `tail` lists every entry after the index entry up to the end of the checkpoint, each as `{i, entry, inclusion}`. `statements` is the first page of the card's staff statements, newest first, each as `{i, entry, inclusion, by}`, where `by` is only a hint at the signer's card number. It is `[]` without statements and `null` when the server could not read or prove the chain. `statementsNext` is the path of the next page, or `null`.
+These are card 1's values while the log had 4 entries. Today the checkpoint is larger and `value.auth` has one item per authority version, but the shape is the same. `entry` is the last index entry of the checkpoint, at position `i`, covering the entries before its `size`. `value` is `{"auth": [[i, n, c], ...], "closed": i | null, "latest": [i, n, c], "standing": i | null}`, where `i` is a log position, `n` a version number and `c` a label hash. `value` is `null` when the card is not in the index. `tail` lists every entry after the index entry up to the end of the checkpoint, each as `{i, entry, inclusion}`. `statements` is the first page of the card's staff statements, newest first, each as `{i, entry, inclusion, by}`, where `by` is only a hint at the signer's card number. It is `[]` without statements and `null` when the server could not read or prove the chain. `statementsNext` is the path of the next page, or `null`.
 
 `proof.checkpoint` and `index.checkpoint` describe the same tree size and root. Their cosignature lines can come in a different order.
 
@@ -115,7 +135,7 @@ Version 1 of card 1 never changes, so it is a stable test vector:
 ```python
 import base64, hashlib, json, urllib.request
 
-card = json.load(urllib.request.urlopen("https://veil.rip/u/1.json"))
+card = json.load(urllib.request.urlopen("https://veil.pub/u/1.json"))
 v1 = card["authority"][0]
 label = v1["label"].encode()
 assert hashlib.sha256(b"veil-rubrica:label:v2\n" + label).hexdigest() == card["id"]
@@ -135,7 +155,7 @@ The signature is Ed25519 by `73ad6159583a43f8ad230a215b758db680efcd3ce32ab8e83c6
 
 The index path below is what a first visit runs. Its cost does not depend on how many versions the card has.
 
-1. Read `GET /v1/log` and require `format: 2` and `staffOrg`. Pin the log origin, its key and the witness policy (`https://log.veil.rip/staging-1/policy`) in your own configuration. Verify `index.checkpoint.note` with the log key and the witness quorum, and check freshness.
+1. Read `GET /v1/log` and require `format: 2` and `staffOrg`. Pin the log origin, its key and the witness policy (`https://log.veil.pub/staging-1/policy`) in your own configuration. Verify `index.checkpoint.note` with the log key and the witness quorum, and check freshness.
 2. Check the RFC 6962 inclusion of `index.entry.entry` at `index.entry.i` in the checkpoint tree. The entry must be `{"kind":"index","root","size","v":2}`. Check each `tail` item the same way. The tail must cover every position from `index.entry.i + 1` to `checkpoint.size - 1`. Refuse a tail longer than 4096 entries (Veil's pages call this `index_stale`).
 3. Fold `index.value` at the index position of the card's `token` with `index.proof`. The result must equal the root in the index entry. Then apply the tail entries about this card with the index rules below. A tail entry that the rules would ignore because of its signature fails the card instead of changing it.
 4. For each `[i, n, c]` in `value.auth`, take the `authority` item at that `i`. Its entry must be included at `i`, and its label must hash to `c` and carry version `n`. For a person, the signature must verify with the entry's `key`, which must be active in the authority before that version, and version 1 is signed by the key its `auth` adds. An organisation's signers are checked in step 6. Apply the `auth` operations in order. The label hash of version 1, in hex, is `id`. Read further authority versions with `authorityNext` when it is not `null`.
@@ -167,9 +187,12 @@ The full check reads every version with `GET /v1/identities/{n}/versions` and ve
 | Version | `{"key","label","signature","v":2}` |
 | Staff statement | `{"action":{"type","until"[,"key"][,"badge"]},"c","key","kind":"moderation"\|"badge","org","prev","signer":{"identity","n"},"target","time","v":2,"signature"}` |
 | Closing | `{"key","kind":"closed","latest","signer":{"identity","n"},"time","token","v":2,"signature"}` |
+| Alert or card statement | `{"c","key","kind":"alert"\|"statement","signer":{"identity","n"},"time","token","v":2,"signature"}` |
 | Index | `{"kind":"index","root","size","v":2}` |
 
-In a version entry `key` is outside the signed label. The index checks the signature with that key only, so it must be active for the signer and written exactly as in the authority. In statements and closings `key` is inside the signed part.
+In a version entry `key` is outside the signed label. The index checks the signature with that key only, so it must be active for the signer and written exactly as in the authority. In statements, closings and card entries `key` is inside the signed part.
+
+An alert or a card statement (since 30 October 2026) is the card's own word: an alert about one linked account, or a published text. `c` is the standard base64 of `SHA-256(salt || canonical statement)`, and the server serves the salt and the statement next to the entry. A person signs with an active key of the card, so `signer.identity` equals `token`. An organisation's entry is signed by an `owner` or `admin` with a key of their own card. These entries change no value in the index and have no chain like `standing`, so a server can stay silent about one. Verify the ones you are shown: the commitment, the signature, the signer's key at that log position and the inclusion proof.
 
 A statement's `action.type` is one of `ban_identity`, `ban_identity_temporary`, `unban_identity`, `ban_key`, `unban_key`, `hide_name`, `unhide_name`, `hide_logo`, `unhide_logo`, `remove_profile`, `erase_for_user`, `cancel_erasure`, `assign_badge` and `remove_badge`. `until` is an integer only for `ban_identity_temporary` and `null` otherwise. `action.key` appears only for `ban_key` and `unban_key`, `action.badge` only for the two badge actions, and `kind` is `badge` exactly for those. `prev` is the position of the previous counted statement about the same card, or `null` for the first. `c` is the standard base64 of `SHA-256(salt || canonical statement)`, which stays private.
 
@@ -196,8 +219,8 @@ A closed card answers HTTP 410 with the erasure receipt and, in format 2, `close
 
 ## On the log host
 
-The log serves `GET https://log.veil.rip/staging-1/index`, which returns `{"entry", "root", "size", "staffOrg"}` for its latest index entry, and `GET https://log.veil.rip/staging-1/index/<token>`, the index bundle of one card on the latest published checkpoint. A verifier can take the Veil organisation token from there and require `GET /v1/log` to name the same one.
+The log serves `GET https://log.veil.pub/staging-1/index`, which returns `{"entry", "root", "size", "staffOrg"}` for its latest index entry, and `GET https://log.veil.pub/staging-1/index/<token>`, the index bundle of one card on the latest published checkpoint. A verifier can take the Veil organisation token from there and require `GET /v1/log` to name the same one.
 
 ## What the log shows
 
-For each card the log shows the public keys with their roles and algorithms, version times, who signs an organisation's versions, its owners and administrators (the whole staff for the Veil organisation), and the type, expiry and signer of each staff action. Names, device names, linked accounts, pictures and moderation reasons stay out of the log.
+For each card the log shows the public keys with their roles and algorithms, version times, who signs an organisation's versions, its owners and administrators (the whole staff for the Veil organisation), the type, expiry and signer of each staff action, and that an alert or a statement was published, when and by which key. Names, device names, linked accounts, keys from elsewhere, pictures, moderation reasons and the text of alerts and statements stay out of the log.

@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """
-Veil client: stdlib-only CLI for every public Veil read and message verification,
-including the reads of log format 2 (authority, statements, labels, members, set paths).
+Veil client: stdlib-only CLI for every public Veil read and for verification of
+signed messages, files and releases. It covers lookups by ID or by name, the reads
+of log format 2 (authority, statements, labels, members, set paths), account alerts,
+card statements, public keys from elsewhere and the canary.
 Signed writes are intentionally NOT implemented: they need the owner's private
-device key, which this tool never touches.
+device key, which this tool never touches. A file is hashed here and only its
+hash is sent.
 
 -- ZephyrVerrater
 """
 import argparse
+import base64
+import hashlib
 import json
 import ipaddress
 import math
@@ -21,8 +26,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-BASE = "https://veil.rip"
-UA = "veil-skill-client/1.2"
+BASE = "https://veil.pub"
+UA = "veil-skill-client/1.3"
 MAX_WAIT = 30
 
 
@@ -177,8 +182,28 @@ def q(**params):
     return ("?" + urllib.parse.urlencode(clean)) if clean else ""
 
 
+LOOKUP = ("account", "discord", "github", "email", "domain", "fediverse", "key", "fingerprint")
+HASHES = ("sha256", "sha512", "blake2b512")
+
+
+def file_hash(path, alg):
+    h = hashlib.new("blake2b" if alg == "blake2b512" else alg)
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def signature_text(path):
+    data = Path(path).read_bytes()
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return base64.b64encode(data).decode("ascii")
+
+
 def main():
-    p = argparse.ArgumentParser(description="Veil (veil.rip) public API client")
+    p = argparse.ArgumentParser(description="Veil (veil.pub) public API client")
     p.add_argument("--base", default=BASE, help="override base URL")
     p.add_argument("--dry-run", action="store_true", help="preview the request with credentials redacted")
     p.add_argument("--api-key-env", metavar="NAME", help="read an optional bearer key from this environment variable")
@@ -187,9 +212,10 @@ def main():
     p.add_argument("--output", metavar="FILE", help="save exact response bytes after a successful request")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    s = sub.add_parser("lookup", help="find a card by exactly one account/key")
+    s = sub.add_parser("lookup", help="find a card by exactly one account, name, key or fingerprint")
     g = s.add_mutually_exclusive_group(required=True)
-    for name in ("discord", "github", "email", "domain", "fediverse", "key", "fingerprint"):
+    g.add_argument("--account", help="anything typed: a username, login, address, profile URL, key, fingerprint, card or alias")
+    for name in LOOKUP[1:]:
         g.add_argument(f"--{name}")
 
     s = sub.add_parser("card", help="full person card + proof"); s.add_argument("card")
@@ -200,11 +226,20 @@ def main():
     s = sub.add_parser("key", help="who holds this key"); s.add_argument("key")
     s = sub.add_parser("key-active", help="was key active at time t"); s.add_argument("key"); s.add_argument("--t", type=int)
 
-    s = sub.add_parser("verify", help="verify a signature block or raw signature")
+    s = sub.add_parser("verify", help="verify a signature block, a raw signature, or a signature over a file or release")
     s.add_argument("--block"); s.add_argument("--block-file")
     s.add_argument("--at", type=int, help="trusted publication time, Unix seconds")
     s.add_argument("--key"); s.add_argument("--message"); s.add_argument("--signature")
     s.add_argument("--platform"); s.add_argument("--subject")
+    s.add_argument("--signature-file", help="file mode: the .sig, .asc, .minisig, clear-signed text or Veil block")
+    s.add_argument("--file", help="file mode: hash this file here; only the hash and the name are sent")
+    s.add_argument("--hash", choices=HASHES, default="sha256", help="the hash --file computes (default sha256)")
+    for name in HASHES:
+        s.add_argument(f"--{name}", help="file mode: the file's hash in hex, computed by you")
+    s.add_argument("--name", help="file mode: the file's name, as a checksum list writes it")
+    s.add_argument("--list-file", help="file mode: the checksum list a detached signature covers")
+    s.add_argument("--format", choices=["ssh", "pgp", "minisign", "veil"])
+    s.add_argument("--card", help="file mode: the signer's card number or alias")
 
     s = sub.add_parser("versions", help="signed versions"); s.add_argument("n")
     s.add_argument("--after", type=int); s.add_argument("--limit", type=int); s.add_argument("--latest", action="store_true")
@@ -225,9 +260,19 @@ def main():
     s = sub.add_parser("set-path", help="format 2: sparse Merkle path of one state item"); s.add_argument("n")
     s.add_argument("set", choices=["keys", "links", "orgs", "members"])
     s.add_argument("--key", required=True, help="public key, platform and subject joined by a newline, or a card token")
+    s = sub.add_parser("alerts", help="a card's account alerts (stolen, abandoned, moved, regained)"); s.add_argument("n")
+    s = sub.add_parser("card-statements", help="a card's own signed statements"); s.add_argument("kind", choices=["u", "o"]); s.add_argument("card")
+    s.add_argument("--before", type=int); s.add_argument("--limit", type=int)
+    s = sub.add_parser("statement", help="one statement or alert by its log position"); s.add_argument("id")
+    s = sub.add_parser("keys-file", help="a person's public keys from elsewhere as a text file"); s.add_argument("card")
+    s.add_argument("--format", choices=["authorized_keys", "allowed_signers", "minisign", "pgp"])
+    s.add_argument("--fp", help="keep one key by fingerprint or public key")
+    sub.add_parser("canary", help="the warrant canary and its history")
+    sub.add_parser("linked-roles", help="Discord Linked Roles: availability and the facts a server can ask for")
     sub.add_parser("log", help="directory log state")
     s = sub.add_parser("catalogue", help="machine-readable endpoint index")
     s.add_argument("--lang", choices=["en", "it"])
+    sub.add_parser("openapi", help="the same reference as an OpenAPI 3.1 document")
     sub.add_parser("quota", help="inspect shared quotas without spending the primary allowance; requires --api-key-env")
     s = sub.add_parser("get", help="GET any public path, e.g. /v1/identities/1/orgs"); s.add_argument("path")
     s = sub.add_parser("doc", help="live contract for one endpoint or guide ID"); s.add_argument("id")
@@ -258,7 +303,7 @@ def main():
 
     c = a.cmd
     if c == "lookup":
-        params = {k: getattr(a, k) for k in ("discord", "github", "email", "domain", "fediverse", "key", "fingerprint")}
+        params = {k: getattr(a, k) for k in LOOKUP}
         get("/v1/lookup" + q(**params))
     elif c == "card": get(f"/u/{urllib.parse.quote(a.card, safe='')}.json")
     elif c == "org": get(f"/o/{urllib.parse.quote(a.card, safe='')}.json")
@@ -268,7 +313,30 @@ def main():
     elif c == "key": get(f"/v1/keys/{a.key}")
     elif c == "key-active": get(f"/v1/keys/{a.key}/active-at" + q(t=a.t))
     elif c == "verify":
-        if a.block or a.block_file:
+        given = [n for n in HASHES if getattr(a, n)]
+        file_mode = a.signature_file or a.file or given or a.name or a.list_file or a.format or a.card
+        if file_mode:
+            if a.block or a.block_file or a.key or a.message is not None or a.signature or a.platform or a.subject:
+                sys.exit("file mode cannot be combined with block/key/message/signature/platform/subject")
+            if not a.signature_file:
+                sys.exit("file mode needs --signature-file")
+            if len(given) + (1 if a.file else 0) != 1:
+                sys.exit("file mode needs exactly one of --file, --sha256, --sha512 or --blake2b512")
+            body = {"signature": signature_text(a.signature_file)}
+            if a.file:
+                body[a.hash] = file_hash(a.file, a.hash)
+            else:
+                body[given[0]] = getattr(a, given[0]).lower()
+            name = a.name or (os.path.basename(a.file) if a.file else None)
+            if name:
+                body["name"] = name
+            if a.list_file:
+                body["list"] = Path(a.list_file).read_text(encoding="utf-8")
+            if a.format:
+                body["format"] = a.format
+            if a.card:
+                body["card"] = a.card
+        elif a.block or a.block_file:
             if a.key or a.message or a.signature or a.platform or a.subject:
                 sys.exit("block mode cannot be combined with key/message/signature/platform/subject")
             block = a.block if a.block else open(a.block_file, encoding="utf-8").read()
@@ -280,7 +348,7 @@ def main():
             if a.platform:
                 body.update(platform=a.platform, subject=a.subject)
         else:
-            sys.exit("give --block/--block-file, or --key --message --signature")
+            sys.exit("give --block/--block-file, --key --message --signature, or --signature-file with a file or its hash")
         if a.at is not None:
             body["at"] = a.at
         send("POST", "/v1/verify", body)
@@ -295,8 +363,15 @@ def main():
     elif c == "labels": get(f"/v1/identities/{seg(a.n)}/labels" + q(after=a.after, limit=a.limit))
     elif c == "members": get(f"/v1/organizations/{seg(a.n)}/members" + q(prefix=a.prefix, bits=a.bits))
     elif c == "set-path": get(f"/v1/identities/{seg(a.n)}/sets/{a.set}/path" + q(key=a.key))
+    elif c == "alerts": get(f"/v1/identities/{seg(a.n)}/alerts")
+    elif c == "card-statements": get(f"/{a.kind}/{seg(a.card)}/statements.json" + q(before=a.before, limit=a.limit))
+    elif c == "statement": get(f"/v1/statements/{seg(a.id)}")
+    elif c == "keys-file": get(f"/u/{seg(a.card)}/keys.txt" + q(format=a.format, fp=a.fp))
+    elif c == "canary": get("/v1/canary")
+    elif c == "linked-roles": get("/v1/discord/linked-roles")
     elif c == "log": get("/v1/log")
     elif c == "catalogue": get("/v1/integrations" + q(lang=a.lang))
+    elif c == "openapi": get("/openapi.json")
     elif c == "quota": get("/v1/rate-limit")
     elif c == "get":
         if not a.path.startswith("/") and not a.path.startswith("http"):
